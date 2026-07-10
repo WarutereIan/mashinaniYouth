@@ -1,0 +1,196 @@
+-- M8: cast_vote + tally RPCs (Slice 2)
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE OR REPLACE FUNCTION public.gen_receipt_code()
+RETURNS text
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+DECLARE
+  chars text := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  result text := '';
+  i int;
+BEGIN
+  FOR i IN 1..16 LOOP
+    result := result || substr(chars, 1 + floor(random() * length(chars))::int, 1);
+  END LOOP;
+  RETURN substr(result, 1, 4) || '-' || substr(result, 5, 4) || '-' || substr(result, 9, 4) || '-' || substr(result, 13, 4);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.tally_by_position(p_position_id text)
+RETURNS TABLE (candidate_id uuid, votes bigint)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT v.candidate_id, count(*)::bigint AS votes
+  FROM public.votes v
+  WHERE v.position_id = p_position_id
+    AND v.status IN ('cast', 'changed')
+  GROUP BY v.candidate_id
+  ORDER BY votes DESC;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.tally_by_position(text) TO anon, authenticated;
+
+CREATE OR REPLACE FUNCTION public.cast_vote(
+  p_position_id text,
+  p_candidate_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id uuid := auth.uid();
+  v_voter public.voters%ROWTYPE;
+  v_position public.positions%ROWTYPE;
+  v_candidate public.candidates%ROWTYPE;
+  v_cycle public.election_cycles%ROWTYPE;
+  v_poll public.poll_windows%ROWTYPE;
+  v_now timestamptz := now();
+  v_receipt text;
+  v_ballot_hash text;
+  v_existing public.votes%ROWTYPE;
+  v_cast_at timestamptz := now();
+BEGIN
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'Unauthorized';
+  END IF;
+
+  SELECT * INTO v_voter FROM public.voters WHERE user_id = v_user_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'You must register as a voter before casting a ballot';
+  END IF;
+
+  SELECT * INTO v_position FROM public.positions WHERE id = p_position_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Unknown position';
+  END IF;
+
+  SELECT * INTO v_candidate FROM public.candidates
+  WHERE id = p_candidate_id AND status = 'approved';
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Candidate not found or not approved';
+  END IF;
+
+  IF v_candidate.position_id IS DISTINCT FROM p_position_id THEN
+    RAISE EXCEPTION 'Candidate does not belong to this position';
+  END IF;
+
+  SELECT * INTO v_cycle FROM public.election_cycles WHERE id = v_position.election_cycle_id;
+  IF v_cycle.phase NOT IN ('open', 'scheduled') THEN
+    RAISE EXCEPTION 'Voting is not open for this election cycle';
+  END IF;
+
+  -- Scope eligibility
+  IF v_position.tier = 'national' THEN
+    NULL;
+  ELSIF v_position.tier = 'county' THEN
+    IF v_voter.county IS DISTINCT FROM v_position.county THEN
+      RAISE EXCEPTION 'You are not eligible to vote in this county position';
+    END IF;
+  ELSIF v_position.tier = 'constituency' THEN
+    IF v_voter.county IS DISTINCT FROM v_position.county
+       OR v_voter.constituency IS DISTINCT FROM v_position.constituency THEN
+      RAISE EXCEPTION 'You are not eligible to vote in this constituency position';
+    END IF;
+  ELSIF v_position.tier = 'ward' THEN
+    IF v_voter.county IS DISTINCT FROM v_position.county
+       OR v_voter.constituency IS DISTINCT FROM v_position.constituency
+       OR v_voter.ward IS DISTINCT FROM v_position.ward THEN
+      RAISE EXCEPTION 'You are not eligible to vote in this ward position';
+    END IF;
+  END IF;
+
+  -- Poll window for voter county (national votes allowed during any open window in cycle)
+  IF v_position.tier <> 'national' THEN
+    SELECT pw.* INTO v_poll
+    FROM public.poll_windows pw
+    WHERE pw.cycle_id = v_cycle.id
+      AND v_voter.county = ANY (pw.counties)
+      AND v_now >= pw.opens_at
+      AND v_now <= pw.closes_at
+    LIMIT 1;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Polls are not open for your county at this time';
+    END IF;
+  ELSE
+    SELECT pw.* INTO v_poll
+    FROM public.poll_windows pw
+    WHERE pw.cycle_id = v_cycle.id
+      AND v_now >= pw.opens_at
+      AND v_now <= pw.closes_at
+    LIMIT 1;
+    IF NOT FOUND AND v_cycle.phase <> 'scheduled' THEN
+      RAISE EXCEPTION 'National polls are not open at this time';
+    END IF;
+  END IF;
+
+  v_receipt := public.gen_receipt_code();
+  WHILE EXISTS (SELECT 1 FROM public.votes WHERE receipt_code = v_receipt) LOOP
+    v_receipt := public.gen_receipt_code();
+  END LOOP;
+
+  v_ballot_hash := encode(
+    digest(
+      v_voter.id::text || ':' || p_position_id || ':' || p_candidate_id::text || ':' || v_cast_at::text,
+      'sha256'
+    ),
+    'hex'
+  );
+
+  SELECT * INTO v_existing FROM public.votes
+  WHERE voter_id = v_voter.id AND position_id = p_position_id;
+
+  IF FOUND THEN
+    UPDATE public.votes SET
+      candidate_id = p_candidate_id,
+      receipt_code = v_receipt,
+      cast_at = v_cast_at,
+      status = 'changed',
+      ballot_hash = v_ballot_hash
+    WHERE id = v_existing.id
+    RETURNING * INTO v_existing;
+  ELSE
+    INSERT INTO public.votes (
+      voter_id, position_id, candidate_id, cycle_id,
+      receipt_code, cast_at, status, ballot_hash
+    ) VALUES (
+      v_voter.id, p_position_id, p_candidate_id, v_cycle.id,
+      v_receipt, v_cast_at, 'cast', v_ballot_hash
+    )
+    RETURNING * INTO v_existing;
+  END IF;
+
+  INSERT INTO public.vote_receipts (
+    receipt_code, voter_id, position_id, candidate_id, cast_at
+  ) VALUES (
+    v_receipt, v_voter.id, p_position_id, p_candidate_id, v_cast_at
+  );
+
+  RETURN jsonb_build_object(
+    'receipt_code', v_receipt,
+    'cast_at', v_cast_at,
+    'position_id', p_position_id,
+    'candidate_id', p_candidate_id
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.cast_vote(text, uuid) TO authenticated;
+
+CREATE OR REPLACE VIEW public.tally_by_position_live AS
+SELECT
+  v.position_id,
+  v.candidate_id,
+  count(*)::bigint AS votes
+FROM public.votes v
+WHERE v.status IN ('cast', 'changed')
+GROUP BY v.position_id, v.candidate_id;
+
+GRANT SELECT ON public.tally_by_position_live TO anon, authenticated;
