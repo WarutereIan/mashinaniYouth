@@ -81,6 +81,7 @@ function ApplyPage() {
   const [ward, setWard] = useState<string>("");
   const [positionId, setPositionId] = useState<string>("");
   const [allPositions, setAllPositions] = useState<Position[]>([]);
+  const [positionsLoaded, setPositionsLoaded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -90,9 +91,15 @@ function ApplyPage() {
     supabase.auth.getSession().then(({ data }) => {
       if (!data.session) navigate({ to: "/auth", search: { redirect: "/candidates/apply" } });
     });
-    listPositions({ cycleSlug: "mykdm-2026" })
-      .then(setAllPositions)
-      .catch(() => setAllPositions([]));
+    listPositions({ cycleSlug: "mykdm-2026", applicationsOpen: true })
+      .then((rows) => {
+        setAllPositions(rows);
+        setPositionsLoaded(true);
+      })
+      .catch(() => {
+        setAllPositions([]);
+        setPositionsLoaded(true);
+      });
   }, [supabaseBackend, navigate]);
 
   const constituencyOptions = useMemo(() => constituenciesForCounty(county), [county]);
@@ -338,6 +345,17 @@ function ApplyPage() {
 
           {/* Seat */}
           <Fieldset title="Seat you're vying for" icon={UserPlus}>
+            {positionsLoaded && allPositions.length === 0 ? (
+              <div className="rounded-lg border border-flag-red/40 bg-flag-red/10 p-4 text-sm">
+                <div className="font-semibold text-flag-red">
+                  Nominations are not open for any position right now
+                </div>
+                <p className="mt-1 text-muted-foreground">
+                  The directorate opens candidate applications per seat. Please check back once a
+                  position is open, or contact the MY-KDM secretariat.
+                </p>
+              </div>
+            ) : null}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Tier *</Label>

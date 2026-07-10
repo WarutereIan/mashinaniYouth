@@ -376,6 +376,200 @@ export const adminDeletePositionFn = createServerFn({ method: "POST" })
     return result;
   });
 
+// New M27 RPCs are not yet in the generated Database types (types are regenerated
+// manually). Call them through a loosely-typed client so the build stays green;
+// the result is cast to the expected shape at the call site.
+type LooseClient = SupabaseClient;
+
+const setApplicationsOpenSchema = z.object({
+  positionId: z.string().min(1),
+  open: z.boolean(),
+});
+
+export const adminSetPositionApplicationsOpenFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: { positionId: string; open: boolean }) => setApplicationsOpenSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await requireMfa(supabase, userId);
+    await requireAdminRole(supabase, userId, "superadmin");
+    const { data: result, error } = await (supabase as unknown as LooseClient).rpc(
+      "admin_set_position_applications_open",
+      { p_id: data.positionId, p_open: data.open },
+    );
+    if (error) throw new Error(error.message);
+    return result as { id: string; applications_open: boolean };
+  });
+
+const cycleFieldsSchema = z.object({
+  name: z.string().trim().min(2),
+  slug: z
+    .string()
+    .trim()
+    .min(2)
+    .regex(/^[a-z0-9-]+$/, "Use lowercase letters, numbers and dashes"),
+  windowStart: z.string().min(1),
+  windowEnd: z.string().min(1),
+  phase: z.enum(["draft", "scheduled", "open", "closed", "tallied", "cancelled"]),
+});
+
+export const adminCreateCycleFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: z.infer<typeof cycleFieldsSchema>) => cycleFieldsSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await requireMfa(supabase, userId);
+    await requireAdminRole(supabase, userId, "superadmin");
+    const { data: result, error } = await (supabase as unknown as LooseClient).rpc(
+      "admin_create_cycle",
+      {
+        p_name: data.name,
+        p_slug: data.slug,
+        p_window_start: data.windowStart,
+        p_window_end: data.windowEnd,
+        p_phase: data.phase,
+      },
+    );
+    if (error) throw new Error(error.message);
+    return result as ElectionCycleRow;
+  });
+
+const updateCycleSchema = cycleFieldsSchema.extend({ id: z.number() });
+
+export const adminUpdateCycleFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: z.infer<typeof updateCycleSchema>) => updateCycleSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await requireMfa(supabase, userId);
+    await requireAdminRole(supabase, userId, "superadmin");
+    const { data: result, error } = await (supabase as unknown as LooseClient).rpc(
+      "admin_update_cycle",
+      {
+        p_id: data.id,
+        p_name: data.name,
+        p_slug: data.slug,
+        p_window_start: data.windowStart,
+        p_window_end: data.windowEnd,
+        p_phase: data.phase,
+      },
+    );
+    if (error) throw new Error(error.message);
+    return result as ElectionCycleRow;
+  });
+
+const deleteCycleSchema = z.object({ id: z.number() });
+
+export const adminDeleteCycleFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: { id: number }) => deleteCycleSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await requireMfa(supabase, userId);
+    await requireAdminRole(supabase, userId, "superadmin");
+    const { error } = await (supabase as unknown as LooseClient).rpc("admin_delete_cycle", {
+      p_id: data.id,
+    });
+    if (error) throw new Error(error.message);
+    return { id: data.id, deleted: true };
+  });
+
+const pollWindowFieldsSchema = z.object({
+  cycleId: z.number(),
+  region: z.string().trim().min(2),
+  pollDate: z.string().min(1),
+  opensAt: z.string().min(1),
+  closesAt: z.string().min(1),
+  counties: z.array(z.string()).default([]),
+});
+
+export const adminCreatePollWindowFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: z.infer<typeof pollWindowFieldsSchema>) => pollWindowFieldsSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await requireMfa(supabase, userId);
+    await requireAdminRole(supabase, userId, "superadmin");
+    const { data: result, error } = await (supabase as unknown as LooseClient).rpc(
+      "admin_create_poll_window",
+      {
+        p_cycle_id: data.cycleId,
+        p_region: data.region,
+        p_poll_date: data.pollDate,
+        p_opens_at: data.opensAt,
+        p_closes_at: data.closesAt,
+        p_counties: data.counties,
+      },
+    );
+    if (error) throw new Error(error.message);
+    return result as PollWindowRow;
+  });
+
+const updatePollWindowSchema = pollWindowFieldsSchema
+  .omit({ cycleId: true })
+  .extend({ id: z.number(), cycleId: z.number() });
+
+export const adminUpdatePollWindowFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: z.infer<typeof updatePollWindowSchema>) => updatePollWindowSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await requireMfa(supabase, userId);
+    await requireAdminRole(supabase, userId, "superadmin");
+    const { data: result, error } = await (supabase as unknown as LooseClient).rpc(
+      "admin_update_poll_window",
+      {
+        p_id: data.id,
+        p_region: data.region,
+        p_poll_date: data.pollDate,
+        p_opens_at: data.opensAt,
+        p_closes_at: data.closesAt,
+        p_counties: data.counties,
+      },
+    );
+    if (error) throw new Error(error.message);
+    return result as PollWindowRow;
+  });
+
+const deletePollWindowSchema = z.object({ id: z.number() });
+
+export const adminDeletePollWindowFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: { id: number }) => deletePollWindowSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await requireMfa(supabase, userId);
+    await requireAdminRole(supabase, userId, "superadmin");
+    const { error } = await (supabase as unknown as LooseClient).rpc("admin_delete_poll_window", {
+      p_id: data.id,
+    });
+    if (error) throw new Error(error.message);
+    return { id: data.id, deleted: true };
+  });
+
+export type ElectionCycleRow = {
+  id: number;
+  name: string;
+  slug: string;
+  window_start: string;
+  window_end: string;
+  phase: "draft" | "scheduled" | "open" | "closed" | "tallied" | "cancelled";
+  created_at: string;
+  updated_at: string;
+};
+
+export type PollWindowRow = {
+  id: number;
+  cycle_id: number;
+  region: string;
+  poll_date: string;
+  opens_at: string;
+  closes_at: string;
+  counties: string[];
+  created_at: string;
+  updated_at: string;
+};
+
 const unsealSchema = z.object({ cycleSlug: z.string() });
 
 export const adminUnsealCycleFn = createServerFn({ method: "POST" })

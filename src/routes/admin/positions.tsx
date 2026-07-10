@@ -6,6 +6,7 @@ import { SiteFooter, SiteHeader } from "@/components/site-chrome";
 import {
   adminCreatePositionFn,
   adminDeletePositionFn,
+  adminSetPositionApplicationsOpenFn,
   adminUpdatePositionFn,
 } from "@/lib/api/admin";
 import { adminRouteLoader } from "@/lib/admin-loader";
@@ -96,6 +97,7 @@ function AdminPositionsPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const isSuperadmin = admin.role === "superadmin";
 
@@ -214,6 +216,23 @@ function AdminPositionsPage() {
     }
   };
 
+  const toggleApplications = async (position: Position, next: boolean) => {
+    setTogglingId(position.id);
+    try {
+      await adminSetPositionApplicationsOpenFn({
+        data: { positionId: position.id, open: next },
+      });
+      setPositions((rows) =>
+        rows.map((p) => (p.id === position.id ? { ...p, applicationsOpen: next } : p)),
+      );
+      toast.success(`${next ? "Opened" : "Closed"} nominations for ${position.title}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Update failed");
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
@@ -237,7 +256,7 @@ function AdminPositionsPage() {
         <p className="mt-2 text-sm text-muted-foreground">
           Manage seats in the 2026 cycle.{" "}
           {isSuperadmin
-            ? "Create, edit, or delete positions."
+            ? "Create, edit, or delete positions, and open/close candidate nominations per seat."
             : "View only — contact a superadmin to make changes."}
         </p>
 
@@ -253,6 +272,7 @@ function AdminPositionsPage() {
                   <TableHead>Tier</TableHead>
                   <TableHead>Scope</TableHead>
                   <TableHead>Location</TableHead>
+                  <TableHead>Nominations</TableHead>
                   {isSuperadmin && <TableHead className="text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
@@ -263,6 +283,35 @@ function AdminPositionsPage() {
                     <TableCell className="uppercase">{p.tier}</TableCell>
                     <TableCell>{p.scope}</TableCell>
                     <TableCell>{p.ward ?? p.constituency ?? p.county ?? "—"}</TableCell>
+                    <TableCell>
+                      {isSuperadmin ? (
+                        <Button
+                          size="sm"
+                          variant={p.applicationsOpen ? "default" : "outline"}
+                          className={p.applicationsOpen ? "bg-gradient-gold" : ""}
+                          disabled={togglingId === p.id}
+                          onClick={() => void toggleApplications(p, !p.applicationsOpen)}
+                        >
+                          {togglingId === p.id ? (
+                            <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                          ) : null}
+                          {p.applicationsOpen ? "Open" : "Closed"}
+                        </Button>
+                      ) : (
+                        <span
+                          className={`inline-flex items-center gap-1.5 text-xs font-medium ${
+                            p.applicationsOpen ? "text-primary" : "text-muted-foreground"
+                          }`}
+                        >
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full ${
+                              p.applicationsOpen ? "bg-primary" : "bg-muted-foreground/40"
+                            }`}
+                          />
+                          {p.applicationsOpen ? "Open" : "Closed"}
+                        </span>
+                      )}
+                    </TableCell>
                     {isSuperadmin && (
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
@@ -290,7 +339,7 @@ function AdminPositionsPage() {
                 {positions.length === 0 && (
                   <TableRow>
                     <TableCell
-                      colSpan={isSuperadmin ? 5 : 4}
+                      colSpan={isSuperadmin ? 6 : 5}
                       className="py-8 text-center text-muted-foreground"
                     >
                       No positions configured.

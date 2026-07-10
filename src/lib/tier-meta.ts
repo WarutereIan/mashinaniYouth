@@ -6,6 +6,8 @@ export interface Position {
   title: string;
   scope: string;
   description: string;
+  /** Whether candidate nominations are open for this position (admin-controlled). */
+  applicationsOpen?: boolean;
   county?: string;
   constituency?: string;
   ward?: string;

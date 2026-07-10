@@ -11,6 +11,7 @@ export interface DbPosition {
   constituency: string | null;
   ward: string | null;
   election_cycle_id: number;
+  applications_open: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -22,6 +23,7 @@ function toPosition(row: DbPosition): Position {
     title: row.title,
     scope: row.scope,
     description: row.description,
+    applicationsOpen: row.applications_open,
     ...(row.county ? { county: row.county } : {}),
     ...(row.constituency ? { constituency: row.constituency } : {}),
     ...(row.ward ? { ward: row.ward } : {}),
@@ -31,9 +33,13 @@ function toPosition(row: DbPosition): Position {
 export async function listPositions(filter?: {
   tier?: Tier;
   cycleSlug?: string;
+  applicationsOpen?: boolean;
 }): Promise<Position[]> {
   let q = supabase.from("positions").select("*").order("tier").order("title");
   if (filter?.tier) q = q.eq("tier", filter.tier);
+  if (filter?.applicationsOpen !== undefined) {
+    q = q.eq("applications_open", filter.applicationsOpen);
+  }
   if (filter?.cycleSlug) {
     const { data: cycle, error: cycleErr } = await supabase
       .from("election_cycles")

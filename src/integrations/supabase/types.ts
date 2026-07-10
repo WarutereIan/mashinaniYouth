@@ -307,6 +307,7 @@ export type Database = {
       };
       positions: {
         Row: {
+          applications_open: boolean;
           constituency: string | null;
           county: string | null;
           created_at: string;
@@ -320,6 +321,7 @@ export type Database = {
           ward: string | null;
         };
         Insert: {
+          applications_open?: boolean;
           constituency?: string | null;
           county?: string | null;
           created_at?: string;
@@ -333,6 +335,7 @@ export type Database = {
           ward?: string | null;
         };
         Update: {
+          applications_open?: boolean;
           constituency?: string | null;
           county?: string | null;
           created_at?: string;
@@ -620,6 +623,27 @@ export type Database = {
         Args: { p_candidate_id: string };
         Returns: Json;
       };
+      admin_create_cycle: {
+        Args: {
+          p_name: string;
+          p_phase?: Database["public"]["Enums"]["election_phase"];
+          p_slug: string;
+          p_window_end: string;
+          p_window_start: string;
+        };
+        Returns: Json;
+      };
+      admin_create_poll_window: {
+        Args: {
+          p_closes_at: string;
+          p_counties?: string[];
+          p_cycle_id: number;
+          p_opens_at: string;
+          p_poll_date: string;
+          p_region: string;
+        };
+        Returns: Json;
+      };
       admin_create_position: {
         Args: {
           p_constituency?: string;
@@ -633,6 +657,8 @@ export type Database = {
         };
         Returns: Json;
       };
+      admin_delete_cycle: { Args: { p_id: number }; Returns: Json };
+      admin_delete_poll_window: { Args: { p_id: number }; Returns: Json };
       admin_delete_position: { Args: { p_id: string }; Returns: Json };
       admin_grant_role: {
         Args: {
@@ -670,7 +696,33 @@ export type Database = {
         };
         Returns: Json;
       };
+      admin_set_position_applications_open: {
+        Args: { p_id: string; p_open: boolean };
+        Returns: Json;
+      };
       admin_unseal_cycle: { Args: { p_cycle_slug: string }; Returns: Json };
+      admin_update_cycle: {
+        Args: {
+          p_id: number;
+          p_name: string;
+          p_phase: Database["public"]["Enums"]["election_phase"];
+          p_slug: string;
+          p_window_end: string;
+          p_window_start: string;
+        };
+        Returns: Json;
+      };
+      admin_update_poll_window: {
+        Args: {
+          p_closes_at: string;
+          p_counties?: string[];
+          p_id: number;
+          p_opens_at: string;
+          p_poll_date: string;
+          p_region: string;
+        };
+        Returns: Json;
+      };
       admin_update_position: {
         Args: {
           p_constituency?: string;

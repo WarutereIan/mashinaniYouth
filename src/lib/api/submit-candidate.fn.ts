@@ -29,15 +29,28 @@ export const submitCandidateFn = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
 
-    const { data: position, error: posErr } = await supabase
+    const { data: positionRow, error: posErr } = await supabase
       .from("positions")
-      .select("id, tier, title, county, constituency, ward, election_cycle_id")
+      .select("*")
       .eq("id", data.position_id)
       .maybeSingle();
     if (posErr) throw new Error(posErr.message);
+    const position = positionRow as {
+      id: string;
+      tier: string;
+      title: string;
+      county: string | null;
+      constituency: string | null;
+      ward: string | null;
+      election_cycle_id: number;
+      applications_open?: boolean;
+    } | null;
     if (!position) throw new Error("Selected position not found");
     if (position.tier !== data.tier) {
       throw new Error("Position tier does not match your selection");
+    }
+    if (!position.applications_open) {
+      throw new Error("Applications are not open for this position");
     }
 
     const { data: cycle, error: cycleErr } = await supabase
