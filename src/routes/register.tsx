@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { useSupabaseVoters } from "@/lib/feature-flags";
+import { isSupabaseVotersEnabled } from "@/lib/feature-flags";
 import { registerVoter, signOutVoter, useVoter } from "@/lib/voters-source";
 import {
   COUNTY_NAMES,
@@ -55,7 +55,7 @@ export const Route = createFileRoute("/register")({
 
 function RegisterPage() {
   const navigate = useNavigate();
-  const supabaseMode = useSupabaseVoters();
+  const supabaseMode = isSupabaseVotersEnabled();
   const { voter: existing, ready } = useVoter();
   const [authChecked, setAuthChecked] = useState(!supabaseMode);
   const [form, setForm] = useState({

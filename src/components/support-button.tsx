@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SUPPORT_URL } from "@/lib/support";
-import { useSupabaseSupport } from "@/lib/feature-flags";
+import { isSupabaseSupportEnabled } from "@/lib/feature-flags";
 import { submitPledge } from "@/lib/api/support";
 
 const AMOUNTS = [500, 1000, 2500, 5000, 10000, 25000];
@@ -44,7 +44,7 @@ export function SupportButton({
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const supabaseSupport = useSupabaseSupport();
+  const supabaseSupport = isSupabaseSupportEnabled();
 
   const chosen = custom ? Number(custom) || 0 : amount;
 

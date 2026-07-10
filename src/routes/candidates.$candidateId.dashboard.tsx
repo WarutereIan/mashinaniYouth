@@ -20,7 +20,7 @@ import { SiteHeader, SiteFooter } from "@/components/site-chrome";
 import { Button } from "@/components/ui/button";
 import { getCandidate, listCandidates, type Candidate } from "@/lib/candidates";
 import { candidatePhoto, mtajiProfileUrl, MTAJI_BASE } from "@/lib/mtaji";
-import { useSupabaseAnalytics } from "@/lib/feature-flags";
+import { isSupabaseAnalyticsEnabled } from "@/lib/feature-flags";
 import { getCandidateDashboardStats, type CandidateDashboardStats } from "@/lib/api/analytics";
 import { subscribeToPositionVotes } from "@/lib/api/votes";
 
@@ -111,7 +111,7 @@ function trendMomentumPct(values: number[]): number {
 
 function CandidateDashboard() {
   const { candidate } = Route.useLoaderData();
-  const supabaseAnalytics = useSupabaseAnalytics();
+  const supabaseAnalytics = isSupabaseAnalyticsEnabled();
   const [peers, setPeers] = useState<Candidate[]>([]);
   const [liveStats, setLiveStats] = useState<CandidateDashboardStats | null>(null);
   const [liveError, setLiveError] = useState<string | null>(null);

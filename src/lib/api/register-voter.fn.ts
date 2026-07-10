@@ -46,7 +46,7 @@ function hashNationalId(nationalId: string): string {
 }
 
 function normalizePhone(phone: string): string {
-  let p = phone.trim().replace(/\s/g, "");
+  const p = phone.trim().replace(/\s/g, "");
   if (p.startsWith("+254")) return p;
   if (p.startsWith("254")) return `+${p}`;
   if (p.startsWith("0")) return `+254${p.slice(1)}`;

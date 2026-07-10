@@ -1,11 +1,11 @@
-import { useSupabaseReferenceData } from "@/lib/feature-flags";
+import { isSupabaseReferenceDataEnabled } from "@/lib/feature-flags";
 import { type Position, type Tier } from "@/lib/tier-meta";
 import { POSITIONS } from "@/lib/mym-data";
 import { getPosition, listPositions } from "@/lib/api/positions";
 
 /** Positions for UI: Supabase when flag on, mock fallback otherwise. */
 export async function fetchPositions(filter?: { tier?: Tier }): Promise<Position[]> {
-  if (!useSupabaseReferenceData())
+  if (!isSupabaseReferenceDataEnabled())
     return POSITIONS.filter((p) => !filter?.tier || p.tier === filter.tier);
   try {
     return await listPositions({ tier: filter?.tier, cycleSlug: "mykdm-2026" });
@@ -20,7 +20,7 @@ export function getPositionByIdSync(id: string): Position | undefined {
 }
 
 export async function getPositionById(id: string): Promise<Position | undefined> {
-  if (!useSupabaseReferenceData()) return getPositionByIdSync(id);
+  if (!isSupabaseReferenceDataEnabled()) return getPositionByIdSync(id);
   try {
     const row = await getPosition(id);
     return row ?? undefined;

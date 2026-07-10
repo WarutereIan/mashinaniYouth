@@ -18,7 +18,7 @@ import {
 import { submitCandidate, type CandidateTier } from "@/lib/candidates";
 import { supabase } from "@/integrations/supabase/client";
 import { listPositions } from "@/lib/api/positions";
-import { useSupabaseBackend } from "@/lib/feature-flags";
+import { isSupabaseBackendEnabled } from "@/lib/feature-flags";
 import { uploadCandidatePhoto, setCandidatePhotoPath } from "@/lib/api/candidate-photos";
 import type { Position } from "@/lib/tier-meta";
 import {
@@ -74,7 +74,7 @@ const applicationSchema = z.object({
 
 function ApplyPage() {
   const navigate = useNavigate();
-  const supabaseBackend = useSupabaseBackend();
+  const supabaseBackend = isSupabaseBackendEnabled();
   const [tier, setTier] = useState<CandidateTier>("county");
   const [county, setCounty] = useState<string>("");
   const [constituency, setConstituency] = useState<string>("");

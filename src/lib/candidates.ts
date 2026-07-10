@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { useSupabaseBackend } from "@/lib/feature-flags";
+import { isSupabaseBackendEnabled } from "@/lib/feature-flags";
 import { submitCandidateFn, type SubmitCandidateInput } from "@/lib/api/submit-candidate.fn";
 
 export type CandidateTier = "national" | "county" | "constituency" | "ward";
@@ -84,7 +84,7 @@ export async function getMyCandidatePositionIds(): Promise<Set<string>> {
 }
 
 export async function submitCandidate(input: NewCandidate): Promise<Candidate> {
-  if (useSupabaseBackend() && input.position_id) {
+  if (isSupabaseBackendEnabled() && input.position_id) {
     const row = await submitCandidateFn({
       data: {
         full_name: input.full_name,

@@ -1,31 +1,31 @@
 /** Feature flags for incremental Supabase rollout. */
-export function useSupabaseReferenceData(): boolean {
+export function isSupabaseReferenceDataEnabled(): boolean {
   const v = import.meta.env.VITE_USE_SUPABASE_REFERENCE_DATA;
-  return v === "true" || v === "1" || useSupabaseBackend();
+  return v === "true" || v === "1" || isSupabaseBackendEnabled();
 }
 
-export function useSupabaseVoters(): boolean {
+export function isSupabaseVotersEnabled(): boolean {
   const v = import.meta.env.VITE_USE_SUPABASE_VOTERS;
-  return v === "true" || v === "1" || useSupabaseBackend();
+  return v === "true" || v === "1" || isSupabaseBackendEnabled();
 }
 
-export function useSupabaseVoting(): boolean {
+export function isSupabaseVotingEnabled(): boolean {
   const v = import.meta.env.VITE_USE_SUPABASE_VOTING;
-  return v === "true" || v === "1" || useSupabaseBackend();
+  return v === "true" || v === "1" || isSupabaseBackendEnabled();
 }
 
-export function useSupabaseAnalytics(): boolean {
+export function isSupabaseAnalyticsEnabled(): boolean {
   const v = import.meta.env.VITE_USE_SUPABASE_ANALYTICS;
-  return v === "true" || v === "1" || useSupabaseBackend();
+  return v === "true" || v === "1" || isSupabaseBackendEnabled();
 }
 
-export function useSupabaseSupport(): boolean {
+export function isSupabaseSupportEnabled(): boolean {
   const v = import.meta.env.VITE_USE_SUPABASE_SUPPORT;
-  return v === "true" || v === "1" || useSupabaseBackend();
+  return v === "true" || v === "1" || isSupabaseBackendEnabled();
 }
 
 /** Master switch — enables all Supabase-backed slices (2–8). */
-export function useSupabaseBackend(): boolean {
+export function isSupabaseBackendEnabled(): boolean {
   const v = import.meta.env.VITE_USE_SUPABASE_BACKEND;
   return v === "true" || v === "1";
 }

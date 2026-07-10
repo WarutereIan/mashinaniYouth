@@ -15,7 +15,7 @@ import { SiteHeader, SiteFooter } from "@/components/site-chrome";
 import { CandidateAvatar } from "@/components/candidate-avatar";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { useSupabaseVoters, useSupabaseVoting } from "@/lib/feature-flags";
+import { isSupabaseVotersEnabled, isSupabaseVotingEnabled } from "@/lib/feature-flags";
 import { TIER_META, type Position, type Tier } from "@/lib/tier-meta";
 import { CANDIDATES, POSITIONS } from "@/lib/mym-data";
 import { fetchPositions } from "@/lib/positions-source";
@@ -47,8 +47,8 @@ export const Route = createFileRoute("/dashboard")({
 
 function DashboardPage() {
   const navigate = useNavigate();
-  const supabaseMode = useSupabaseVoters();
-  const supabaseVoting = useSupabaseVoting();
+  const supabaseMode = isSupabaseVotersEnabled();
+  const supabaseVoting = isSupabaseVotingEnabled();
   const { voter, ready } = useVoter();
   const { tallyPosition } = useVoteActions();
   const [positions, setPositions] = useState<Position[]>(POSITIONS);

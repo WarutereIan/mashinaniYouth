@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useSupabaseVoting } from "@/lib/feature-flags";
+import { isSupabaseVotingEnabled } from "@/lib/feature-flags";
 import type { Voter } from "@/lib/api/voters";
 import { getMyVoter } from "@/lib/api/voters";
 import {
@@ -29,7 +29,7 @@ import type { Position } from "@/lib/tier-meta";
 export type { CastVoteInput, CastVoteResult, TallyRow };
 
 export function useVoteActions() {
-  const supabase = useSupabaseVoting();
+  const supabase = isSupabaseVotingEnabled();
   const { voter } = useVoter();
 
   const castVote = useCallback(
@@ -70,7 +70,7 @@ export function useVoteActions() {
 }
 
 export function usePositionTally(positionId: string | null) {
-  const supabase = useSupabaseVoting();
+  const supabase = isSupabaseVotingEnabled();
   const [tally, setTally] = useState<TallyRow[]>([]);
 
   useEffect(() => {
@@ -121,7 +121,7 @@ export function checkEligibility(
       reason: "You are vying for this seat, so you cannot vote in it",
     };
   }
-  if (useSupabaseVoting()) {
+  if (isSupabaseVotingEnabled()) {
     if (position.tier === "national") return { eligible: true };
     if (position.tier === "county" && position.county === voter.county) return { eligible: true };
     if (
@@ -151,7 +151,7 @@ export async function fetchElectionTotals(): Promise<{
   totalVotesCast: number;
   totalVotesByPosition: Record<string, number>;
 }> {
-  if (useSupabaseVoting()) {
+  if (isSupabaseVotingEnabled()) {
     const [total, byPos] = await Promise.all([totalVotesCastApi(), totalVotesByPositionApi()]);
     return { totalVotesCast: total, totalVotesByPosition: byPos };
   }
@@ -162,7 +162,7 @@ export async function fetchElectionTotals(): Promise<{
 }
 
 export async function fetchMyVotes(_voter: Voter | null) {
-  if (!useSupabaseVoting()) return [];
+  if (!isSupabaseVotingEnabled()) return [];
   return getMyVotes();
 }
 

@@ -34,9 +34,9 @@ import { CANDIDATES, POSITIONS } from "@/lib/mym-data";
 import { TIER_META, type ElectionCandidate, type Position, type Tier } from "@/lib/tier-meta";
 import { fetchPositions } from "@/lib/positions-source";
 import {
-  useSupabaseAnalytics,
-  useSupabaseBackend,
-  useSupabaseReferenceData,
+  isSupabaseAnalyticsEnabled,
+  isSupabaseBackendEnabled,
+  isSupabaseReferenceDataEnabled,
 } from "@/lib/feature-flags";
 import { DATE_FMT, pollStatus, regionForCounty, useNow } from "@/lib/election-schedule";
 import {
@@ -75,8 +75,8 @@ const TIER_FALLBACK_POSITION: Record<Tier, string> = {
 function ElectionsPage() {
   const navigate = useNavigate();
   const { voter } = useVoter();
-  const supabaseReferenceData = useSupabaseReferenceData();
-  const supabaseBackend = useSupabaseBackend();
+  const supabaseReferenceData = isSupabaseReferenceDataEnabled();
+  const supabaseBackend = isSupabaseBackendEnabled();
   const supabaseReferenceEnabled = supabaseReferenceData || supabaseBackend;
   const { castVote: castVoteAction, getMyVote: getMyVoteAction } = useVoteActions();
   const [activeTier, setActiveTier] = useState<Tier>("county");
@@ -710,7 +710,7 @@ function VoteByGenderChart({
   scopeLabel: string;
   activePositionId: string | null;
 }) {
-  const supabaseAnalytics = useSupabaseAnalytics();
+  const supabaseAnalytics = isSupabaseAnalyticsEnabled();
   const [split, setSplit] = useState<{ female: number; male: number } | null>(null);
 
   useEffect(() => {
@@ -801,7 +801,7 @@ function TurnoutByRegion({
   constituency?: string;
   ward?: string;
 }) {
-  const supabaseAnalytics = useSupabaseAnalytics();
+  const supabaseAnalytics = isSupabaseAnalyticsEnabled();
   const [turnout, setTurnout] = useState<{
     registered: number;
     voted: number;
@@ -905,7 +905,7 @@ function AgeSplitPanel({
   scopeLabel: string;
   activePositionId: string | null;
 }) {
-  const supabaseAnalytics = useSupabaseAnalytics();
+  const supabaseAnalytics = isSupabaseAnalyticsEnabled();
   const [apiRows, setApiRows] = useState<Array<{ band: string; pct: number }> | null>(null);
 
   useEffect(() => {

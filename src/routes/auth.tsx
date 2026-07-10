@@ -4,7 +4,7 @@ import { z } from "zod";
 import { Eye, EyeOff, IdCard, Loader2, LogIn, UserCheck, UserPlus, Vote } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import { useSupabaseVoters } from "@/lib/feature-flags";
+import { isSupabaseVotersEnabled } from "@/lib/feature-flags";
 import { registerVoter } from "@/lib/voters-source";
 import {
   COUNTY_NAMES,
@@ -82,7 +82,7 @@ function authErrorMessage(error: unknown): string {
 function AuthPage() {
   const navigate = useNavigate();
   const { redirect } = Route.useSearch();
-  const supabaseVoters = useSupabaseVoters();
+  const supabaseVoters = isSupabaseVotersEnabled();
   const [tab, setTab] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

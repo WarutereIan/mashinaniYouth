@@ -28,7 +28,7 @@ const SECRETARIAT_PHOTOS: Record<string, string> = {
 import { SiteHeader, SiteFooter } from "@/components/site-chrome";
 import { Button } from "@/components/ui/button";
 import { POSITIONS, CANDIDATES } from "@/lib/mym-data";
-import { useSupabaseBackend } from "@/lib/feature-flags";
+import { isSupabaseBackendEnabled } from "@/lib/feature-flags";
 import { getPublicCounters, type PublicCounters } from "@/lib/api/analytics";
 
 export const Route = createFileRoute("/about")({
@@ -52,7 +52,7 @@ export const Route = createFileRoute("/about")({
 });
 
 function AboutPage() {
-  const supabaseBackend = useSupabaseBackend();
+  const supabaseBackend = isSupabaseBackendEnabled();
   const [counters, setCounters] = useState<PublicCounters>({
     countiesOnBallot: 47,
     livePositions: POSITIONS.length,

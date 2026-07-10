@@ -20,7 +20,7 @@ import { SupportButton } from "@/components/support-button";
 import { POSITIONS, TIER_META, CANDIDATES, type Tier, type Candidate } from "@/lib/mym-data";
 import heroProfessions from "@/assets/hero-professions.jpg";
 import { mtajiProfileUrl, candidatePhoto } from "@/lib/mtaji";
-import { useSupabaseBackend } from "@/lib/feature-flags";
+import { isSupabaseBackendEnabled } from "@/lib/feature-flags";
 import { getPublicCounters, type PublicCounters } from "@/lib/api/analytics";
 
 export const Route = createFileRoute("/")({
@@ -78,7 +78,7 @@ function TypewriterLine({ words, className }: { words: string[]; className?: str
 
 function Home() {
   const tiers = ["national", "county", "constituency", "ward"] as const;
-  const supabaseBackend = useSupabaseBackend();
+  const supabaseBackend = isSupabaseBackendEnabled();
   const [counters, setCounters] = useState<PublicCounters>({
     countiesOnBallot: 47,
     livePositions: POSITIONS.length,

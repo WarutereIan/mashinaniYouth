@@ -2,7 +2,7 @@ import { redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { useSupabaseBackend } from "@/lib/feature-flags";
+import { isSupabaseBackendEnabled } from "@/lib/feature-flags";
 import type { Tier } from "@/lib/tier-meta";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -58,7 +58,7 @@ export async function requireAdminLoader(redirectPath: string): Promise<AdminUse
     }
     throw redirect({ to: "/auth", search: { redirect: redirectPath } });
   }
-  if (useSupabaseBackend() && !admin.mfaEnrolled) {
+  if (isSupabaseBackendEnabled() && !admin.mfaEnrolled) {
     throw redirect({ to: "/admin/mfa-required", search: { redirect: redirectPath } });
   }
   return admin;
@@ -80,7 +80,7 @@ export async function getMyAdminRole(): Promise<AdminUser | null> {
   if (!data) return null;
 
   let mfaEnrolled = true;
-  if (useSupabaseBackend()) {
+  if (isSupabaseBackendEnabled()) {
     mfaEnrolled = await checkMfaEnrolled(data.user_id);
   }
 
@@ -114,7 +114,7 @@ async function requireAdminRole(
 }
 
 async function requireMfa(client: SupabaseClient<Database>, userId: string): Promise<void> {
-  if (!useSupabaseBackend()) return;
+  if (!isSupabaseBackendEnabled()) return;
   const { data, error } = await client.rpc("admin_mfa_enrolled", { p_user: userId });
   if (error) throw new Error(error.message);
   if (!data) throw new Error("MFA required: enroll TOTP before performing admin actions");
