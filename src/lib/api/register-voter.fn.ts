@@ -53,6 +53,26 @@ function normalizePhone(phone: string): string {
   return `+254${p}`;
 }
 
+function voterDuplicateMessage(err: {
+  code?: string;
+  constraint?: string;
+  message?: string;
+}): string {
+  if (err.code !== "23505") return err.message ?? "Voter registration failed";
+  switch (err.constraint) {
+    case "voters_national_id_hash_key":
+      return "This National ID is already registered on the voter roll";
+    case "voters_phone_key":
+      return "This phone number is already registered to an account";
+    case "voters_full_name_ci_key":
+      return "This name is already registered to an account";
+    case "voters_user_id_key":
+      return "You already have a voter registration";
+    default:
+      return "This detail is already registered to an account";
+  }
+}
+
 export const registerVoterFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((data: RegisterVoterInput) => registerInputSchema.parse(data))
@@ -105,7 +125,7 @@ export const registerVoterFn = createServerFn({ method: "POST" })
         .single();
       if (updateErr) {
         if (updateErr.code === "23505") {
-          throw new Error("This National ID is already registered on the voter roll");
+          throw new Error(voterDuplicateMessage(updateErr));
         }
         throw new Error(updateErr.message);
       }
@@ -120,7 +140,7 @@ export const registerVoterFn = createServerFn({ method: "POST" })
         .single();
       if (insertErr) {
         if (insertErr.code === "23505") {
-          throw new Error("This National ID is already registered on the voter roll");
+          throw new Error(voterDuplicateMessage(insertErr));
         }
         throw new Error(insertErr.message);
       }

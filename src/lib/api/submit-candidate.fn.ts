@@ -5,7 +5,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 const submitSchema = z.object({
   full_name: z.string().trim().min(3).max(120),
   national_id: z.string().trim().min(5).max(20),
-  iebc_voter_number: z.string().trim().min(5).max(30),
+  iebc_voter_number: z.string().trim().max(30).optional().or(z.literal("")),
   phone: z.string().trim().min(7).max(20),
   email: z.string().trim().email().max(255).optional().or(z.literal("")),
   date_of_birth: z.string().optional().or(z.literal("")),
@@ -22,6 +22,24 @@ const submitSchema = z.object({
 });
 
 export type SubmitCandidateInput = z.infer<typeof submitSchema>;
+
+function candidateDuplicateMessage(err: {
+  code?: string;
+  constraint?: string;
+  message?: string;
+}): string {
+  if (err.code !== "23505") return err.message ?? "Application failed";
+  switch (err.constraint) {
+    case "candidates_national_id_key":
+      return "This National ID is already registered as a candidate";
+    case "candidates_phone_key":
+      return "This phone number is already registered to an account";
+    case "candidates_full_name_ci_key":
+      return "This name is already registered to an account";
+    default:
+      return "This detail is already registered to an account";
+  }
+}
 
 export const submitCandidateFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -65,7 +83,7 @@ export const submitCandidateFn = createServerFn({ method: "POST" })
       .insert({
         full_name: data.full_name,
         national_id: data.national_id,
-        iebc_voter_number: data.iebc_voter_number,
+        iebc_voter_number: data.iebc_voter_number || null,
         phone: data.phone,
         email: data.email || null,
         date_of_birth: data.date_of_birth || null,
@@ -88,7 +106,7 @@ export const submitCandidateFn = createServerFn({ method: "POST" })
 
     if (error) {
       if (error.code === "23505") {
-        throw new Error("This National ID is already registered as a candidate");
+        throw new Error(candidateDuplicateMessage(error));
       }
       throw new Error(error.message);
     }

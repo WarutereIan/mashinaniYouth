@@ -1,4 +1,4 @@
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+﻿export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type Database = {
   // Allows to automatically instantiate createClient with right options
@@ -104,7 +104,7 @@ export type Database = {
           full_name: string;
           gender: string | null;
           id: string;
-          iebc_voter_number: string;
+          iebc_voter_number: string | null;
           national_id: string;
           party: string | null;
           phone: string;
@@ -133,7 +133,7 @@ export type Database = {
           full_name: string;
           gender?: string | null;
           id?: string;
-          iebc_voter_number: string;
+          iebc_voter_number?: string | null;
           national_id: string;
           party?: string | null;
           phone: string;
@@ -162,7 +162,7 @@ export type Database = {
           full_name?: string;
           gender?: string | null;
           id?: string;
-          iebc_voter_number?: string;
+          iebc_voter_number?: string | null;
           national_id?: string;
           party?: string | null;
           phone?: string;
@@ -756,11 +756,16 @@ export type Database = {
         Args: { p_candidate_id: string; p_position_id: string };
         Returns: Json;
       };
+      check_signup_uniqueness: {
+        Args: { p_name: string; p_national_id?: string; p_phone?: string };
+        Returns: Json;
+      };
       count_approved_candidates: { Args: never; Returns: number };
       count_positions: { Args: never; Returns: number };
       count_registered_voters: { Args: never; Returns: number };
       gen_receipt_code: { Args: never; Returns: string };
       is_admin: { Args: { p_user_id?: string }; Returns: boolean };
+      normalize_phone_ke: { Args: { p_phone: string }; Returns: string };
       recent_audit: {
         Args: { p_limit?: number };
         Returns: {

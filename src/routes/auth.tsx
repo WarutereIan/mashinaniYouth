@@ -60,6 +60,13 @@ const voterSchema = z.object({
     .regex(/^(?:\+?254|0)?[17]\d{8}$/, "Enter a valid Kenyan phone number"),
 });
 
+// Identity captured at signup for a "vie" intent (no location needed yet —
+// the seat is chosen on the apply page).
+const vieSchema = z.object({
+  id: voterSchema.shape.id,
+  phone: voterSchema.shape.phone,
+});
+
 function authErrorMessage(error: unknown): string {
   const e = error as { code?: string; status?: number; message?: string } | undefined;
   const code = e?.code;
@@ -79,6 +86,21 @@ function authErrorMessage(error: unknown): string {
   return e?.message ?? "Something went wrong. Please try again.";
 }
 
+async function checkSignupUniqueness(input: {
+  name: string;
+  nationalId?: string;
+  phone?: string;
+}): Promise<{ nameTaken: boolean; phoneTaken: boolean; idTaken: boolean }> {
+  const { data, error } = await supabase.rpc("check_signup_uniqueness", {
+    p_name: input.name,
+    p_national_id: input.nationalId,
+    p_phone: input.phone,
+  });
+  if (error) throw error;
+  const r = data as unknown as { name_taken: boolean; phone_taken: boolean; id_taken: boolean };
+  return { nameTaken: r.name_taken, phoneTaken: r.phone_taken, idTaken: r.id_taken };
+}
+
 function AuthPage() {
   const navigate = useNavigate();
   const { redirect } = Route.useSearch();
@@ -88,6 +110,8 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
+  const [nameError, setNameError] = useState("");
+  const [nameWarning, setNameWarning] = useState("");
   const [intent, setIntent] = useState<Intent>("vote");
   const [voter, setVoter] = useState({ id: "", county: "", constituency: "", ward: "", phone: "" });
   const [voterErrors, setVoterErrors] = useState<Partial<Record<keyof typeof voter, string>>>({});
@@ -133,8 +157,24 @@ function AuthPage() {
       setConfirmTouched(true);
       return toast.error("Passwords do not match.");
     }
-    let parsedVoter: z.infer<typeof voterSchema> | null = null;
-    if (wantsVoter) {
+
+    // Validate identity. "vote"/"both" register on the voter roll (need
+    // location too); "vie" only needs National ID + phone for now.
+    let parsedIdentity: { id: string; phone: string } | null = null;
+    let parsedLocation: { county: string; constituency: string; ward: string } | null = null;
+    if (intent === "vie") {
+      const parsed = vieSchema.safeParse(voter);
+      if (!parsed.success) {
+        const errs: typeof voterErrors = {};
+        for (const issue of parsed.error.issues) {
+          errs[issue.path[0] as keyof typeof voter] = issue.message;
+        }
+        setVoterErrors(errs);
+        return;
+      }
+      setVoterErrors({});
+      parsedIdentity = parsed.data;
+    } else {
       const parsed = voterSchema.safeParse(voter);
       if (!parsed.success) {
         const errs: typeof voterErrors = {};
@@ -149,7 +189,38 @@ function AuthPage() {
         return;
       }
       setVoterErrors({});
-      parsedVoter = parsed.data;
+      parsedIdentity = { id: parsed.data.id, phone: parsed.data.phone };
+      parsedLocation = {
+        county: parsed.data.county,
+        constituency: parsed.data.constituency,
+        ward: parsed.data.ward,
+      };
+    }
+
+    // Uniqueness pre-check BEFORE creating the auth account (avoids orphan
+    // accounts). National ID and phone are HARD blocks; name is a SOFT warning
+    // (two people may share a name). national ID against the hashed voters
+    // table is enforced by a DB unique constraint at insert time as a backstop.
+    setNameError("");
+    setNameWarning("");
+    try {
+      const dup = await checkSignupUniqueness({
+        name,
+        nationalId: parsedIdentity.id,
+        phone: parsedIdentity.phone,
+      });
+      const errs: typeof voterErrors = {};
+      if (dup.idTaken) errs.id = "This National ID is already registered.";
+      if (dup.phoneTaken) errs.phone = "This phone number is already registered.";
+      if (dup.nameTaken)
+        setNameWarning("This name is already linked to an account. If it's yours, try logging in.");
+      setVoterErrors(errs);
+      if (dup.idTaken || dup.phoneTaken) {
+        toast.error("An account with these details already exists. Try logging in instead.");
+        return;
+      }
+    } catch {
+      // If the probe itself fails, fall through — DB constraints still backstop.
     }
 
     setBusy(true);
@@ -166,15 +237,32 @@ function AuthPage() {
       return toast.error(authErrorMessage(error));
     }
 
-    if (wantsVoter && parsedVoter) {
+    // Forward the signup identity to the candidate apply page so it doesn't
+    // ask for name / National ID / phone again. Consumed (and cleared) there.
+    if (intent === "vie" || intent === "both") {
+      try {
+        sessionStorage.setItem(
+          "mym:signup-identity",
+          JSON.stringify({
+            fullName: name,
+            nationalId: parsedIdentity.id,
+            phone: parsedIdentity.phone,
+          }),
+        );
+      } catch {
+        // sessionStorage may be unavailable; apply page falls back to fetching.
+      }
+    }
+
+    if (wantsVoter && parsedLocation) {
       try {
         await registerVoter({
           name,
-          id: parsedVoter.id,
-          county: parsedVoter.county,
-          constituency: parsedVoter.constituency,
-          ward: parsedVoter.ward,
-          phone: parsedVoter.phone,
+          id: parsedIdentity.id,
+          county: parsedLocation.county,
+          constituency: parsedLocation.constituency,
+          ward: parsedLocation.ward,
+          phone: parsedIdentity.phone,
         });
         window.dispatchEvent(new Event("mym:voter-changed"));
       } catch (err) {
@@ -277,10 +365,18 @@ function AuthPage() {
                     id="su-name"
                     required
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => {
+                      setName(e.target.value);
+                      if (nameError) setNameError("");
+                      if (nameWarning) setNameWarning("");
+                    }}
                     placeholder="Wanjiru Kariuki"
                     autoComplete="name"
                   />
+                  {nameError && <p className="text-xs text-destructive">{nameError}</p>}
+                  {nameWarning && (
+                    <p className="text-xs text-amber-600 dark:text-amber-500">{nameWarning}</p>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="su-email">Email</Label>
@@ -387,10 +483,11 @@ function AuthPage() {
                   </div>
                 </div>
 
-                {wantsVoter && (
+                {(wantsVoter || intent === "vie") && (
                   <div className="space-y-4 rounded-lg border border-border/70 bg-muted/30 p-4">
                     <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                      <IdCard className="h-4 w-4 text-primary" /> Voter roll details
+                      <IdCard className="h-4 w-4 text-primary" />
+                      {wantsVoter ? "Voter roll details" : "Candidate identity"}
                     </div>
                     <Field
                       label="National ID number"
@@ -402,34 +499,40 @@ function AuthPage() {
                       placeholder="e.g. 34567890"
                       inputMode="numeric"
                     />
-                    <SelectField
-                      label="County"
-                      value={voter.county}
-                      onChange={(v) =>
-                        setVoter({ ...voter, county: v, constituency: "", ward: "" })
-                      }
-                      options={COUNTY_NAMES}
-                      placeholder="Select county"
-                      error={voterErrors.county}
-                    />
-                    <SelectField
-                      label="Constituency"
-                      value={voter.constituency}
-                      onChange={(v) => setVoter({ ...voter, constituency: v, ward: "" })}
-                      options={constituencyOpts}
-                      placeholder={voter.county ? "Select constituency" : "Choose county first"}
-                      disabled={!voter.county}
-                      error={voterErrors.constituency}
-                    />
-                    <SelectField
-                      label="Ward"
-                      value={voter.ward}
-                      onChange={(v) => setVoter({ ...voter, ward: v })}
-                      options={wardOpts}
-                      placeholder={voter.constituency ? "Select ward" : "Choose constituency first"}
-                      disabled={!voter.constituency}
-                      error={voterErrors.ward}
-                    />
+                    {wantsVoter && (
+                      <>
+                        <SelectField
+                          label="County"
+                          value={voter.county}
+                          onChange={(v) =>
+                            setVoter({ ...voter, county: v, constituency: "", ward: "" })
+                          }
+                          options={COUNTY_NAMES}
+                          placeholder="Select county"
+                          error={voterErrors.county}
+                        />
+                        <SelectField
+                          label="Constituency"
+                          value={voter.constituency}
+                          onChange={(v) => setVoter({ ...voter, constituency: v, ward: "" })}
+                          options={constituencyOpts}
+                          placeholder={voter.county ? "Select constituency" : "Choose county first"}
+                          disabled={!voter.county}
+                          error={voterErrors.constituency}
+                        />
+                        <SelectField
+                          label="Ward"
+                          value={voter.ward}
+                          onChange={(v) => setVoter({ ...voter, ward: v })}
+                          options={wardOpts}
+                          placeholder={
+                            voter.constituency ? "Select ward" : "Choose constituency first"
+                          }
+                          disabled={!voter.constituency}
+                          error={voterErrors.ward}
+                        />
+                      </>
+                    )}
                     <Field
                       label="Phone number"
                       value={voter.phone}

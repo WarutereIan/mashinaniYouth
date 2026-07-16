@@ -17,6 +17,7 @@ import { Route as CandidatesRouteImport } from './routes/candidates'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CandidatesIndexRouteImport } from './routes/candidates.index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as VerifyCertificateNumberRouteImport } from './routes/verify.$certificateNumber'
 import { Route as ReceiptReceiptCodeRouteImport } from './routes/receipt.$receiptCode'
@@ -72,6 +73,11 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const CandidatesIndexRoute = CandidatesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => CandidatesRoute,
 } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/admin/',
@@ -173,6 +179,7 @@ export interface FileRoutesByFullPath {
   '/receipt/$receiptCode': typeof ReceiptReceiptCodeRoute
   '/verify/$certificateNumber': typeof VerifyCertificateNumberRoute
   '/admin/': typeof AdminIndexRoute
+  '/candidates/': typeof CandidatesIndexRoute
   '/candidates/$candidateId/certificate': typeof CandidatesCandidateIdCertificateRoute
   '/candidates/$candidateId/dashboard': typeof CandidatesCandidateIdDashboardRoute
 }
@@ -180,7 +187,6 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/auth': typeof AuthRoute
-  '/candidates': typeof CandidatesRouteWithChildren
   '/dashboard': typeof DashboardRoute
   '/elections': typeof ElectionsRouteWithChildren
   '/register': typeof RegisterRoute
@@ -198,6 +204,7 @@ export interface FileRoutesByTo {
   '/receipt/$receiptCode': typeof ReceiptReceiptCodeRoute
   '/verify/$certificateNumber': typeof VerifyCertificateNumberRoute
   '/admin': typeof AdminIndexRoute
+  '/candidates': typeof CandidatesIndexRoute
   '/candidates/$candidateId/certificate': typeof CandidatesCandidateIdCertificateRoute
   '/candidates/$candidateId/dashboard': typeof CandidatesCandidateIdDashboardRoute
 }
@@ -224,6 +231,7 @@ export interface FileRoutesById {
   '/receipt/$receiptCode': typeof ReceiptReceiptCodeRoute
   '/verify/$certificateNumber': typeof VerifyCertificateNumberRoute
   '/admin/': typeof AdminIndexRoute
+  '/candidates/': typeof CandidatesIndexRoute
   '/candidates/$candidateId/certificate': typeof CandidatesCandidateIdCertificateRoute
   '/candidates/$candidateId/dashboard': typeof CandidatesCandidateIdDashboardRoute
 }
@@ -251,6 +259,7 @@ export interface FileRouteTypes {
     | '/receipt/$receiptCode'
     | '/verify/$certificateNumber'
     | '/admin/'
+    | '/candidates/'
     | '/candidates/$candidateId/certificate'
     | '/candidates/$candidateId/dashboard'
   fileRoutesByTo: FileRoutesByTo
@@ -258,7 +267,6 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/auth'
-    | '/candidates'
     | '/dashboard'
     | '/elections'
     | '/register'
@@ -276,6 +284,7 @@ export interface FileRouteTypes {
     | '/receipt/$receiptCode'
     | '/verify/$certificateNumber'
     | '/admin'
+    | '/candidates'
     | '/candidates/$candidateId/certificate'
     | '/candidates/$candidateId/dashboard'
   id:
@@ -301,6 +310,7 @@ export interface FileRouteTypes {
     | '/receipt/$receiptCode'
     | '/verify/$certificateNumber'
     | '/admin/'
+    | '/candidates/'
     | '/candidates/$candidateId/certificate'
     | '/candidates/$candidateId/dashboard'
   fileRoutesById: FileRoutesById
@@ -384,6 +394,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/candidates/': {
+      id: '/candidates/'
+      path: '/'
+      fullPath: '/candidates/'
+      preLoaderRoute: typeof CandidatesIndexRouteImport
+      parentRoute: typeof CandidatesRoute
     }
     '/admin/': {
       id: '/admin/'
@@ -495,12 +512,14 @@ declare module '@tanstack/react-router' {
 
 interface CandidatesRouteChildren {
   CandidatesApplyRoute: typeof CandidatesApplyRoute
+  CandidatesIndexRoute: typeof CandidatesIndexRoute
   CandidatesCandidateIdCertificateRoute: typeof CandidatesCandidateIdCertificateRoute
   CandidatesCandidateIdDashboardRoute: typeof CandidatesCandidateIdDashboardRoute
 }
 
 const CandidatesRouteChildren: CandidatesRouteChildren = {
   CandidatesApplyRoute: CandidatesApplyRoute,
+  CandidatesIndexRoute: CandidatesIndexRoute,
   CandidatesCandidateIdCertificateRoute: CandidatesCandidateIdCertificateRoute,
   CandidatesCandidateIdDashboardRoute: CandidatesCandidateIdDashboardRoute,
 }

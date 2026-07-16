@@ -36,7 +36,7 @@ export const Route = createFileRoute("/candidates/apply")({
       {
         name: "description",
         content:
-          "Apply to vie for a Mashinani Youth Kazi Delivery Movement seat. Submit your National ID and IEBC voter number to receive your electronic certificate.",
+          "Apply to vie for a Mashinani Youth Kazi Delivery Movement seat. Submit your National ID to receive your electronic certificate.",
       },
     ],
   }),
@@ -51,7 +51,7 @@ const applicationSchema = z.object({
     .min(5, "Kenyan National ID number is required")
     .max(20)
     .regex(/^[0-9A-Za-z-]+$/, "Only letters, numbers and dashes allowed"),
-  iebc_voter_number: z.string().trim().min(5, "IEBC voter registration number is required").max(30),
+  iebc_voter_number: z.string().trim().max(30).optional().or(z.literal("")),
   phone: z
     .string()
     .trim()
@@ -85,6 +85,15 @@ function ApplyPage() {
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  // Identity captured at signup (name / National ID / phone). Prefilled from the
+  // signup flow (sessionStorage) or, failing that, the auth user + voter record,
+  // so we never ask the contestant for these twice.
+  const [identity, setIdentity] = useState<{
+    fullName: string;
+    nationalId: string;
+    phone: string;
+  }>({ fullName: "", nationalId: "", phone: "" });
+  const [identityLoaded, setIdentityLoaded] = useState(false);
 
   useEffect(() => {
     if (!supabaseBackend) return;
@@ -101,6 +110,70 @@ function ApplyPage() {
         setPositionsLoaded(true);
       });
   }, [supabaseBackend, navigate]);
+
+  useEffect(() => {
+    if (!supabaseBackend) return;
+    let cancelled = false;
+
+    async function loadIdentity() {
+      let next = { fullName: "", nationalId: "", phone: "" };
+
+      // 1. Identity forwarded straight from the signup flow (same session).
+      try {
+        const raw = sessionStorage.getItem("mym:signup-identity");
+        if (raw) {
+          const parsed = JSON.parse(raw) as {
+            fullName?: string;
+            nationalId?: string;
+            phone?: string;
+          };
+          next = {
+            fullName: parsed.fullName ?? "",
+            nationalId: parsed.nationalId ?? "",
+            phone: parsed.phone ?? "",
+          };
+          sessionStorage.removeItem("mym:signup-identity");
+        }
+      } catch {
+        // ignore
+      }
+
+      // 2. Fall back to the auth user + voter record for anything still missing.
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!cancelled && user) {
+          if (!next.fullName) {
+            next.fullName = (user.user_metadata?.full_name as string | undefined) ?? "";
+          }
+          if (!next.phone || !next.nationalId) {
+            const { data: voter } = await supabase
+              .from("voters")
+              .select("phone, full_name")
+              .eq("user_id", user.id)
+              .maybeSingle();
+            if (voter) {
+              if (!next.phone) next.phone = voter.phone ?? "";
+              if (!next.fullName) next.fullName = next.fullName || voter.full_name || "";
+            }
+          }
+        }
+      } catch {
+        // ignore — fields will just be shown as inputs
+      }
+
+      if (!cancelled) {
+        setIdentity(next);
+        setIdentityLoaded(true);
+      }
+    }
+
+    loadIdentity();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabaseBackend]);
 
   const constituencyOptions = useMemo(() => constituenciesForCounty(county), [county]);
   const wardOptions = useMemo(() => wardsForConstituency(constituency), [constituency]);
@@ -128,10 +201,10 @@ function ApplyPage() {
     setErrors({});
     const fd = new FormData(e.currentTarget);
     const raw = {
-      full_name: String(fd.get("full_name") ?? ""),
-      national_id: String(fd.get("national_id") ?? ""),
+      full_name: identity.fullName || String(fd.get("full_name") ?? ""),
+      national_id: identity.nationalId || String(fd.get("national_id") ?? ""),
       iebc_voter_number: String(fd.get("iebc_voter_number") ?? ""),
-      phone: String(fd.get("phone") ?? ""),
+      phone: identity.phone || String(fd.get("phone") ?? ""),
       email: String(fd.get("email") ?? ""),
       date_of_birth: String(fd.get("date_of_birth") ?? ""),
       gender: String(fd.get("gender") ?? ""),
@@ -185,7 +258,7 @@ function ApplyPage() {
       const candidate = await submitCandidate({
         full_name: parsed.data.full_name,
         national_id: parsed.data.national_id,
-        iebc_voter_number: parsed.data.iebc_voter_number,
+        iebc_voter_number: parsed.data.iebc_voter_number ?? "",
         phone: parsed.data.phone,
         email: parsed.data.email || null,
         date_of_birth: parsed.data.date_of_birth || null,
@@ -256,8 +329,8 @@ function ApplyPage() {
             <span className="text-gradient-gold">to vie</span>
           </h1>
           <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
-            Submit your details below. We verify your National ID and IEBC voter registration, then
-            issue you a tamper-proof electronic certificate to appear on the ballot.
+            Submit your details below. We verify your National ID, then issue you a tamper-proof
+            electronic certificate to appear on the ballot.
           </p>
         </div>
       </section>
@@ -265,82 +338,116 @@ function ApplyPage() {
       <section className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
         <form onSubmit={onSubmit} className="space-y-8">
           {/* Identity */}
-          <Fieldset title="Identity verification" icon={ShieldCheck}>
-            <Field
-              label="Full name (as on ID)"
-              name="full_name"
-              placeholder="e.g. Wanjiru Kariuki"
-              error={errors["full_name"]}
-              required
-            />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field
-                label="Kenyan National ID number"
-                name="national_id"
-                placeholder="e.g. 31245678"
-                error={errors["national_id"]}
-                required
-              />
-              <Field
-                label="IEBC voter registration number"
-                name="iebc_voter_number"
-                placeholder="e.g. IEBC-047-000123"
-                error={errors["iebc_voter_number"]}
-                required
-              />
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field
-                label="Phone"
-                name="phone"
-                type="tel"
-                placeholder="+254 7XX XXX XXX"
-                error={errors["phone"]}
-                required
-              />
-              <Field
-                label="Email (optional)"
-                name="email"
-                type="email"
-                placeholder="you@example.com"
-                error={errors["email"]}
-              />
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field
-                label="Date of birth"
-                name="date_of_birth"
-                type="date"
-                error={errors["date_of_birth"]}
-              />
-              <div className="space-y-1.5">
-                <Label>Gender</Label>
-                <Select name="gender">
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select gender" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Female">Female</SelectItem>
-                    <SelectItem value="Male">Male</SelectItem>
-                    <SelectItem value="Non-binary">Non-binary</SelectItem>
-                    <SelectItem value="Prefer not to say">Prefer not to say</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="photo">Profile photo (optional)</Label>
-              <Input
-                id="photo"
-                name="photo"
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
-              />
-              <p className="text-xs text-muted-foreground">
-                JPG, PNG or WebP up to 5 MB. Shown on the ballot once approved.
-              </p>
-            </div>
+          <Fieldset title="Your details" icon={ShieldCheck}>
+            {!identityLoaded ? (
+              <p className="text-sm text-muted-foreground">Loading your details…</p>
+            ) : (
+              <>
+                {(identity.fullName || identity.nationalId || identity.phone) && (
+                  <div className="rounded-lg border border-primary/25 bg-primary/5 p-4 text-sm">
+                    <div className="font-medium text-primary">From your sign-up</div>
+                    <dl className="mt-2 grid gap-2 sm:grid-cols-3">
+                      {identity.fullName && (
+                        <div>
+                          <dt className="text-xs text-muted-foreground">Name</dt>
+                          <dd className="font-medium">{identity.fullName}</dd>
+                        </div>
+                      )}
+                      {identity.nationalId && (
+                        <div>
+                          <dt className="text-xs text-muted-foreground">National ID</dt>
+                          <dd className="font-medium">{identity.nationalId}</dd>
+                        </div>
+                      )}
+                      {identity.phone && (
+                        <div>
+                          <dt className="text-xs text-muted-foreground">Phone</dt>
+                          <dd className="font-medium">{identity.phone}</dd>
+                        </div>
+                      )}
+                    </dl>
+                  </div>
+                )}
+
+                {!identity.fullName && (
+                  <Field
+                    label="Full name (as on ID)"
+                    name="full_name"
+                    placeholder="e.g. Wanjiru Kariuki"
+                    error={errors["full_name"]}
+                    required
+                  />
+                )}
+                {!identity.nationalId && (
+                  <Field
+                    label="Kenyan National ID number"
+                    name="national_id"
+                    placeholder="e.g. 31245678"
+                    error={errors["national_id"]}
+                    required
+                  />
+                )}
+                {!identity.phone && (
+                  <Field
+                    label="Phone"
+                    name="phone"
+                    type="tel"
+                    placeholder="+254 7XX XXX XXX"
+                    error={errors["phone"]}
+                    required
+                  />
+                )}
+
+                <Field
+                  label="IEBC voter registration number (optional)"
+                  name="iebc_voter_number"
+                  placeholder="e.g. IEBC-047-000123"
+                  error={errors["iebc_voter_number"]}
+                />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field
+                    label="Email (optional)"
+                    name="email"
+                    type="email"
+                    placeholder="you@example.com"
+                    error={errors["email"]}
+                  />
+                  <Field
+                    label="Date of birth (optional)"
+                    name="date_of_birth"
+                    type="date"
+                    error={errors["date_of_birth"]}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Gender (optional)</Label>
+                  <Select name="gender">
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select gender" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Female">Female</SelectItem>
+                      <SelectItem value="Male">Male</SelectItem>
+                      <SelectItem value="Non-binary">Non-binary</SelectItem>
+                      <SelectItem value="Prefer not to say">Prefer not to say</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="photo">Profile photo (optional)</Label>
+                  <Input
+                    id="photo"
+                    name="photo"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    JPG, PNG or WebP up to 5 MB. Shown on the ballot once approved.
+                  </p>
+                </div>
+              </>
+            )}
           </Fieldset>
 
           {/* Seat */}
@@ -517,7 +624,7 @@ function ApplyPage() {
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/25 bg-primary/5 p-4 text-sm">
             <div className="flex items-center gap-2 text-primary">
               <ShieldCheck className="h-4 w-4" />
-              Your ID and IEBC number are validated before your certificate is issued.
+              Your ID is validated before your certificate is issued.
             </div>
             <Button type="submit" disabled={submitting} className="bg-gradient-gold">
               {submitting ? "Submitting…" : "Submit application"}
