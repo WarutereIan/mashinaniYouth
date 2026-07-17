@@ -20,6 +20,14 @@ docs/admin-guide.local.md
 
 tmp/**
 
+# Playwright
+e2e/.env.local
+e2e-report/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
