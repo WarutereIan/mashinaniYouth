@@ -5,6 +5,7 @@ import { Eye, EyeOff, IdCard, Loader2, LogIn, UserCheck, UserPlus, Vote } from "
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { isSupabaseVotersEnabled } from "@/lib/feature-flags";
+import { resolvePostLoginPath } from "@/lib/api/admin-check";
 import { registerVoter } from "@/lib/voters-source";
 import {
   COUNTY_NAMES,
@@ -125,8 +126,10 @@ function AuthPage() {
   const wantsVoter = intent === "vote" || intent === "both";
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) navigate({ to: redirect ?? "/dashboard" });
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) return;
+      const dest = await resolvePostLoginPath({ redirect, userId: data.user.id });
+      navigate({ to: dest });
     });
   }, [navigate, redirect]);
 
@@ -144,11 +147,28 @@ function AuthPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data: signIn, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      setBusy(false);
+      return toast.error(authErrorMessage(error));
+    }
+
+    // Ensure the session JWT is attached before we probe admin_users.
+    if (signIn.session) {
+      await supabase.auth.setSession(signIn.session);
+    }
+
+    const dest = await resolvePostLoginPath({
+      redirect,
+      userId: signIn.user?.id,
+    });
     setBusy(false);
-    if (error) return toast.error(authErrorMessage(error));
-    toast.success("Welcome back!");
-    navigate({ to: afterAuth() });
+    if (dest === "/admin") {
+      toast.success("Welcome back, admin!");
+    } else {
+      toast.success("Welcome back!");
+    }
+    navigate({ to: dest });
   };
 
   const handleSignup = async (e: React.FormEvent) => {

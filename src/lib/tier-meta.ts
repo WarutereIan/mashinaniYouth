@@ -8,6 +8,8 @@ export interface Position {
   description: string;
   /** Whether candidate nominations are open for this position (admin-controlled). */
   applicationsOpen?: boolean;
+  /** FK to the poll window this position is scheduled in. */
+  pollWindowId?: number | null;
   county?: string;
   constituency?: string;
   ward?: string;

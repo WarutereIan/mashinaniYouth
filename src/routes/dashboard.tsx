@@ -28,6 +28,7 @@ import {
   tallyPosition as tallyPositionLocal,
 } from "@/lib/voter-store";
 import { signOutVoter, useVoter, voterIdDisplay } from "@/lib/voters-source";
+import { getMyAdminRow } from "@/lib/api/admin-check";
 
 export const Route = createFileRoute("/dashboard")({
   ssr: false,
@@ -58,12 +59,28 @@ function DashboardPage() {
   );
   const [candidateCards, setCandidateCards] = useState<Record<string, ElectionCandidate>>({});
   const [vyingPositions, setVyingPositions] = useState<Set<string>>(new Set());
+  const [adminChecked, setAdminChecked] = useState(!isSupabaseVotersEnabled());
 
   useEffect(() => {
     if (!supabaseMode || !ready) return;
-    supabase.auth.getSession().then(({ data }) => {
-      if (!data.session) navigate({ to: "/auth", search: { redirect: "/dashboard" } });
+    let cancelled = false;
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (cancelled) return;
+      if (!data.session) {
+        navigate({ to: "/auth", search: { redirect: "/dashboard" } });
+        return;
+      }
+      const admin = await getMyAdminRow(data.session.user.id);
+      if (cancelled) return;
+      if (admin) {
+        navigate({ to: "/admin" });
+        return;
+      }
+      setAdminChecked(true);
     });
+    return () => {
+      cancelled = true;
+    };
   }, [supabaseMode, ready, navigate]);
 
   useEffect(() => {
@@ -137,7 +154,7 @@ function DashboardPage() {
     void load();
   }, [myVotes, supabaseVoting, tallyPosition, voter]);
 
-  if (!ready) {
+  if (!ready || !adminChecked) {
     return (
       <div className="min-h-screen bg-background">
         <SiteHeader />

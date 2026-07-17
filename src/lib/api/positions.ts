@@ -12,6 +12,7 @@ export interface DbPosition {
   ward: string | null;
   election_cycle_id: number;
   applications_open: boolean;
+  poll_window_id: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -24,6 +25,7 @@ function toPosition(row: DbPosition): Position {
     scope: row.scope,
     description: row.description,
     applicationsOpen: row.applications_open,
+    pollWindowId: row.poll_window_id,
     ...(row.county ? { county: row.county } : {}),
     ...(row.constituency ? { constituency: row.constituency } : {}),
     ...(row.ward ? { ward: row.ward } : {}),
@@ -34,11 +36,15 @@ export async function listPositions(filter?: {
   tier?: Tier;
   cycleSlug?: string;
   applicationsOpen?: boolean;
+  pollWindowId?: number;
 }): Promise<Position[]> {
   let q = supabase.from("positions").select("*").order("tier").order("title");
   if (filter?.tier) q = q.eq("tier", filter.tier);
   if (filter?.applicationsOpen !== undefined) {
     q = q.eq("applications_open", filter.applicationsOpen);
+  }
+  if (filter?.pollWindowId !== undefined) {
+    q = q.eq("poll_window_id", filter.pollWindowId);
   }
   if (filter?.cycleSlug) {
     const { data: cycle, error: cycleErr } = await supabase

@@ -8,13 +8,14 @@ import {
   adminDeletePositionFn,
   adminSetPositionApplicationsOpenFn,
   adminUpdatePositionFn,
+  listPollWindows,
+  listElectionCycles,
 } from "@/lib/api/admin";
 import { adminRouteLoader } from "@/lib/admin-loader";
 import { listPositions } from "@/lib/api/positions";
 import {
   COUNTY_NAMES,
   constituenciesForCounty,
-  validateLocationForTier,
   wardsForConstituency,
 } from "@/lib/locations";
 import type { Position, Tier } from "@/lib/tier-meta";
@@ -55,6 +56,8 @@ const SCOPE_BY_TIER: Record<Tier, string> = {
   ward: "Ward Leadership",
 };
 
+type PollWindow = { id: number; region: string; poll_date: string };
+
 type FormState = {
   title: string;
   tier: Tier;
@@ -63,6 +66,7 @@ type FormState = {
   county: string;
   constituency: string;
   ward: string;
+  pollWindowId: string;
 };
 
 const emptyForm = (tier: Tier = "county"): FormState => ({
@@ -73,6 +77,7 @@ const emptyForm = (tier: Tier = "county"): FormState => ({
   county: "",
   constituency: "",
   ward: "",
+  pollWindowId: "",
 });
 
 export const Route = createFileRoute("/admin/positions")({
@@ -80,7 +85,12 @@ export const Route = createFileRoute("/admin/positions")({
   loader: async ({ location }) => {
     const { admin } = await adminRouteLoader(location.pathname);
     const positions = await listPositions({ cycleSlug: "mykdm-2026" });
-    return { admin, positions };
+    const cycles = await listElectionCycles();
+    const cycle = cycles.find((c) => c.slug === "mykdm-2026");
+    const pollWindows: PollWindow[] = cycle
+      ? ((await listPollWindows(cycle.id)) as PollWindow[])
+      : [];
+    return { admin, positions, pollWindows };
   },
   head: () => ({
     meta: [{ title: "Admin — Positions — MY-KDM" }, { name: "robots", content: "noindex" }],
@@ -89,7 +99,7 @@ export const Route = createFileRoute("/admin/positions")({
 });
 
 function AdminPositionsPage() {
-  const { admin, positions: initialPositions } = Route.useLoaderData();
+  const { admin, positions: initialPositions, pollWindows } = Route.useLoaderData();
   const [positions, setPositions] = useState(initialPositions);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Position | null>(null);
@@ -98,8 +108,16 @@ function AdminPositionsPage() {
   const [busy, setBusy] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [filterWindowId, setFilterWindowId] = useState<string>("all");
 
   const isSuperadmin = admin.role === "superadmin";
+
+  const filteredPositions = useMemo(() => {
+    if (filterWindowId === "all") return positions;
+    if (filterWindowId === "unassigned") return positions.filter((p) => !p.pollWindowId);
+    const id = Number(filterWindowId);
+    return positions.filter((p) => p.pollWindowId === id);
+  }, [positions, filterWindowId]);
 
   const constituencyOptions = useMemo(() => constituenciesForCounty(form.county), [form.county]);
   const wardOptions = useMemo(() => wardsForConstituency(form.constituency), [form.constituency]);
@@ -131,6 +149,7 @@ function AdminPositionsPage() {
       county: position.county ?? "",
       constituency: position.constituency ?? "",
       ward: position.ward ?? "",
+      pollWindowId: position.pollWindowId ? String(position.pollWindowId) : "",
     });
     setErrors({});
     setDialogOpen(true);
@@ -152,13 +171,14 @@ function AdminPositionsPage() {
     if (form.title.trim().length < 2) next.title = "Title is required";
     if (form.scope.trim().length < 2) next.scope = "Scope is required";
     if (form.tier !== "national") {
-      const locationError = validateLocationForTier(
-        form.tier,
-        form.county,
-        form.constituency || undefined,
-        form.ward || undefined,
-      );
-      if (locationError) next.location = locationError;
+      if (!form.county) next.location = "County is required for this tier";
+      else if (
+        (form.tier === "constituency" || form.tier === "ward") &&
+        !form.constituency
+      )
+        next.location = "Constituency is required for this tier";
+      else if (form.tier === "ward" && !form.ward)
+        next.location = "Ward is required for ward-tier positions";
     }
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -174,11 +194,9 @@ function AdminPositionsPage() {
         scope: form.scope.trim(),
         description: form.description.trim() || form.title.trim(),
         county: form.tier === "national" ? undefined : form.county || undefined,
-        constituency:
-          form.tier === "national" || form.tier === "county"
-            ? undefined
-            : form.constituency || undefined,
-        ward: form.tier === "ward" ? form.ward || undefined : undefined,
+        constituency: form.tier === "national" ? undefined : form.constituency || undefined,
+        ward: form.tier === "national" ? undefined : form.ward || undefined,
+        pollWindowId: form.pollWindowId ? Number(form.pollWindowId) : null,
         cycleSlug: "mykdm-2026",
       };
 
@@ -261,8 +279,27 @@ function AdminPositionsPage() {
         </p>
 
         <Card className="mt-6">
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">All positions</CardTitle>
+            <div className="flex items-center gap-2">
+              <Label className="text-xs text-muted-foreground whitespace-nowrap">
+                Filter by schedule:
+              </Label>
+              <Select value={filterWindowId} onValueChange={setFilterWindowId}>
+                <SelectTrigger className="w-48 h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All windows</SelectItem>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  {pollWindows.map((pw) => (
+                    <SelectItem key={pw.id} value={String(pw.id)}>
+                      {pw.region} — {pw.poll_date}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </CardHeader>
           <CardContent>
             <Table>
@@ -272,17 +309,26 @@ function AdminPositionsPage() {
                   <TableHead>Tier</TableHead>
                   <TableHead>Scope</TableHead>
                   <TableHead>Location</TableHead>
+                  <TableHead>Schedule</TableHead>
                   <TableHead>Nominations</TableHead>
                   {isSuperadmin && <TableHead className="text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {positions.map((p) => (
+                {filteredPositions.map((p) => (
                   <TableRow key={p.id}>
                     <TableCell className="font-medium">{p.title}</TableCell>
                     <TableCell className="uppercase">{p.tier}</TableCell>
                     <TableCell>{p.scope}</TableCell>
-                    <TableCell>{p.ward ?? p.constituency ?? p.county ?? "—"}</TableCell>
+                    <TableCell>
+                      {[p.county, p.constituency, p.ward].filter(Boolean).join(" › ") || "—"}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {(() => {
+                        const pw = pollWindows.find((w) => w.id === p.pollWindowId);
+                        return pw ? `${pw.region} (${pw.poll_date})` : "—";
+                      })()}
+                    </TableCell>
                     <TableCell>
                       {isSuperadmin ? (
                         <Button
@@ -336,10 +382,10 @@ function AdminPositionsPage() {
                     )}
                   </TableRow>
                 ))}
-                {positions.length === 0 && (
+                {filteredPositions.length === 0 && (
                   <TableRow>
                     <TableCell
-                      colSpan={isSuperadmin ? 6 : 5}
+                      colSpan={isSuperadmin ? 7 : 6}
                       className="py-8 text-center text-muted-foreground"
                     >
                       No positions configured.
@@ -400,68 +446,101 @@ function AdminPositionsPage() {
                 />
               </div>
               {form.tier !== "national" && (
-                <div className="space-y-2">
-                  <Label>County</Label>
-                  <Select
-                    value={form.county}
-                    onValueChange={(v) =>
-                      setForm((f) => ({ ...f, county: v, constituency: "", ward: "" }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select county" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {COUNTY_NAMES.map((name) => (
-                        <SelectItem key={name} value={name}>
-                          {name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              {(form.tier === "constituency" || form.tier === "ward") && (
-                <div className="space-y-2">
-                  <Label>Constituency</Label>
-                  <Select
-                    value={form.constituency}
-                    onValueChange={(v) => setForm((f) => ({ ...f, constituency: v, ward: "" }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select constituency" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {constituencyOptions.map((name) => (
-                        <SelectItem key={name} value={name}>
-                          {name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              {form.tier === "ward" && (
-                <div className="space-y-2">
-                  <Label>Ward</Label>
-                  <Select
-                    value={form.ward}
-                    onValueChange={(v) => setForm((f) => ({ ...f, ward: v }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select ward" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {wardOptions.map((name) => (
-                        <SelectItem key={name} value={name}>
-                          {name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                <>
+                  <div className="space-y-2">
+                    <Label>County *</Label>
+                    <Select
+                      value={form.county}
+                      onValueChange={(v) =>
+                        setForm((f) => ({ ...f, county: v, constituency: "", ward: "" }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select county" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-72">
+                        {COUNTY_NAMES.map((name) => (
+                          <SelectItem key={name} value={name}>
+                            {name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>
+                      Constituency{" "}
+                      {(form.tier === "constituency" || form.tier === "ward") && "*"}
+                    </Label>
+                    <Select
+                      value={form.constituency}
+                      onValueChange={(v) => setForm((f) => ({ ...f, constituency: v, ward: "" }))}
+                      disabled={!form.county}
+                    >
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={form.county ? "Select constituency" : "Select county first"}
+                        />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-72">
+                        {constituencyOptions.map((name) => (
+                          <SelectItem key={name} value={name}>
+                            {name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Ward {form.tier === "ward" && "*"}</Label>
+                    <Select
+                      value={form.ward}
+                      onValueChange={(v) => setForm((f) => ({ ...f, ward: v }))}
+                      disabled={!form.constituency}
+                    >
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={
+                            form.constituency ? "Select ward" : "Select constituency first"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-72">
+                        {wardOptions.map((name) => (
+                          <SelectItem key={name} value={name}>
+                            {name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
               )}
               {errors.location && <p className="text-xs text-flag-red">{errors.location}</p>}
+              <div className="space-y-2">
+                <Label>Voting schedule (poll window)</Label>
+                <Select
+                  value={form.pollWindowId || "none"}
+                  onValueChange={(v) =>
+                    setForm((f) => ({ ...f, pollWindowId: v === "none" ? "" : v }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="None (unassigned)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None (unassigned)</SelectItem>
+                    {pollWindows.map((pw) => (
+                      <SelectItem key={pw.id} value={String(pw.id)}>
+                        {pw.region} — {pw.poll_date}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Assign this position to a specific voting window/date.
+                </p>
+              </div>
             </div>
             <DialogFooter>
               <Button onClick={() => void save()} disabled={busy}>

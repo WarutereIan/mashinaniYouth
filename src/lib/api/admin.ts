@@ -10,6 +10,11 @@ import type { Database } from "@/integrations/supabase/types";
 
 export type AdminRole = "superadmin" | "reviewer" | "viewer";
 
+// TOTP/MFA enforcement switch. Set to false for now so admins aren't forced
+// through TOTP enrollment; flip to true to re-enable the MFA requirement
+// (loader redirect to /admin/mfa-required + per-action requireMfa() guard).
+const ADMIN_MFA_ENFORCED = false;
+
 export interface AdminUser {
   userId: string;
   role: AdminRole;
@@ -58,7 +63,9 @@ export async function requireAdminLoader(redirectPath: string): Promise<AdminUse
     }
     throw redirect({ to: "/auth", search: { redirect: redirectPath } });
   }
-  if (isSupabaseBackendEnabled() && !admin.mfaEnrolled) {
+  // TOTP/MFA enforcement temporarily disabled — flip ADMIN_MFA_ENFORCED to true
+  // to re-require enrollment again:
+  if (ADMIN_MFA_ENFORCED && isSupabaseBackendEnabled() && !admin.mfaEnrolled) {
     throw redirect({ to: "/admin/mfa-required", search: { redirect: redirectPath } });
   }
   return admin;
@@ -74,13 +81,17 @@ export async function getMyAdminRole(): Promise<AdminUser | null> {
   const { data: session } = await supabase.auth.getSession();
   if (!session.session) return null;
 
-  const { data, error } = await supabase.from("admin_users").select("user_id, role").maybeSingle();
+  const { data, error } = await supabase
+    .from("admin_users")
+    .select("user_id, role")
+    .eq("user_id", session.session.user.id)
+    .maybeSingle();
 
   if (error) throw error;
   if (!data) return null;
 
   let mfaEnrolled = true;
-  if (isSupabaseBackendEnabled()) {
+  if (ADMIN_MFA_ENFORCED && isSupabaseBackendEnabled()) {
     mfaEnrolled = await checkMfaEnrolled(data.user_id);
   }
 
@@ -114,6 +125,9 @@ async function requireAdminRole(
 }
 
 async function requireMfa(client: SupabaseClient<Database>, userId: string): Promise<void> {
+  // TOTP/MFA enforcement temporarily disabled — flip ADMIN_MFA_ENFORCED to true
+  // to re-require MFA for admin actions. Call sites are left in place.
+  if (!ADMIN_MFA_ENFORCED) return;
   if (!isSupabaseBackendEnabled()) return;
   const { data, error } = await client.rpc("admin_mfa_enrolled", { p_user: userId });
   if (error) throw new Error(error.message);
@@ -126,6 +140,16 @@ export async function listPendingCandidates() {
     .select("*")
     .eq("status", "pending")
     .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function listAllCandidates(statusFilter?: string) {
+  let q = supabase.from("candidates").select("*").order("created_at", { ascending: false });
+  if (statusFilter && statusFilter !== "all") {
+    q = q.eq("status", statusFilter as "pending" | "approved" | "rejected");
+  }
+  const { data, error } = await q;
   if (error) throw error;
   return data ?? [];
 }
@@ -209,6 +233,34 @@ export const adminRejectCandidateFn = createServerFn({ method: "POST" })
     });
     if (error) throw new Error(error.message);
     return result;
+  });
+
+const setCandidateStatusSchema = z.object({
+  candidateId: z.string().uuid(),
+  status: z.enum(["pending", "approved", "rejected"]),
+  reason: z.string().optional(),
+});
+
+/** Set candidate status from any state (approve, reject, or revert to pending). */
+export const adminSetCandidateStatusFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: z.infer<typeof setCandidateStatusSchema>) =>
+    setCandidateStatusSchema.parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await requireMfa(supabase, userId);
+    await requireAdminRole(supabase, userId);
+    const { data: result, error } = await (supabase as unknown as LooseClient).rpc(
+      "admin_set_candidate_status",
+      {
+        p_candidate_id: data.candidateId,
+        p_status: data.status,
+        p_reason: data.reason,
+      },
+    );
+    if (error) throw new Error(error.message);
+    return result as { id: string; status: string; certificate_number?: string | null };
   });
 
 const phaseSchema = z.object({
@@ -312,6 +364,7 @@ const positionFieldsSchema = z.object({
   ward: z.string().optional(),
   description: z.string().optional(),
   cycleSlug: z.string().optional(),
+  pollWindowId: z.number().nullable().optional(),
 });
 
 export const adminCreatePositionFn = createServerFn({ method: "POST" })
@@ -330,6 +383,7 @@ export const adminCreatePositionFn = createServerFn({ method: "POST" })
       p_ward: data.ward,
       p_description: data.description ?? "",
       p_cycle_slug: data.cycleSlug ?? "mykdm-2026",
+      p_poll_window_id: data.pollWindowId ?? null,
     });
     if (error) throw new Error(error.message);
     return result;
@@ -355,6 +409,7 @@ export const adminUpdatePositionFn = createServerFn({ method: "POST" })
       p_constituency: data.constituency,
       p_ward: data.ward,
       p_description: data.description,
+      p_poll_window_id: data.pollWindowId ?? null,
     });
     if (error) throw new Error(error.message);
     return result;

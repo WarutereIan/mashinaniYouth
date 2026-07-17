@@ -1,9 +1,11 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
-import { LogOut, Menu, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { LogOut, Menu, Shield, X } from "lucide-react";
 import { FaFacebook, FaInstagram, FaXTwitter, FaYoutube } from "react-icons/fa6";
 import { Button } from "@/components/ui/button";
 import { signOutVoter, useVoter } from "@/lib/voters-source";
+import { supabase } from "@/integrations/supabase/client";
+import { getMyAdminRow } from "@/lib/api/admin-check";
 import logoAsset from "@/assets/mykdm-logo.asset.json";
 import { MTAJI_BASE } from "@/lib/mtaji";
 import { SupportButton } from "@/components/support-button";
@@ -44,6 +46,32 @@ export function SiteHeader() {
   const { voter } = useVoter();
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
+
+  // Auth session awareness so signed-in admins (who have no voter record) still
+  // appear logged in up top, with a route into /admin.
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = async () => {
+      const { data } = await supabase.auth.getUser();
+      if (cancelled) return;
+      if (!data.user) {
+        setIsAdmin(false);
+        return;
+      }
+      const admin = await getMyAdminRow(data.user.id);
+      if (!cancelled) setIsAdmin(!!admin);
+    };
+    void refresh();
+    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+      void refresh();
+    });
+    return () => {
+      cancelled = true;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
 
   const logout = async () => {
     await signOutVoter();
@@ -115,6 +143,21 @@ export function SiteHeader() {
                 <LogOut className="mr-1.5 h-3.5 w-3.5" /> Sign out
               </Button>
             </>
+          ) : isAdmin ? (
+            <>
+              <Link
+                to="/admin"
+                className="flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 transition hover:border-primary/40 hover:bg-primary/5"
+              >
+                <span className="grid h-6 w-6 place-items-center rounded-full bg-primary/15 text-primary">
+                  <Shield className="h-3.5 w-3.5" />
+                </span>
+                <span className="text-sm font-medium">Admin</span>
+              </Link>
+              <Button variant="ghost" size="sm" onClick={logout}>
+                <LogOut className="mr-1.5 h-3.5 w-3.5" /> Sign out
+              </Button>
+            </>
           ) : (
             <>
               <Button variant="ghost" size="sm" asChild>
@@ -178,6 +221,17 @@ export function SiteHeader() {
                 <Button variant="outline" size="sm" onClick={logout} className="flex-1">
                   <LogOut className="mr-1.5 h-3.5 w-3.5" /> Sign out ({voter.name.split(" ")[0]})
                 </Button>
+              ) : isAdmin ? (
+                <>
+                  <Button variant="outline" size="sm" asChild className="flex-1">
+                    <Link to="/admin" onClick={() => setOpen(false)}>
+                      <Shield className="mr-1.5 h-3.5 w-3.5" /> Admin
+                    </Link>
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={logout} className="flex-1">
+                    <LogOut className="mr-1.5 h-3.5 w-3.5" /> Sign out
+                  </Button>
+                </>
               ) : (
                 <>
                   <Button variant="outline" size="sm" asChild className="flex-1">
