@@ -1,4 +1,5 @@
 import { Building2, MapPin, Vote } from "lucide-react";
+import type { ReactNode } from "react";
 import { TIER_META, type Tier } from "@/lib/tier-meta";
 import {
   Select,
@@ -37,7 +38,7 @@ export interface LocationTierBarProps {
   /** Optional homeLocation used to render a subtle marker on the voter's registered area. */
   homeLocation?: { county?: string; constituency?: string; ward?: string } | null;
   /** Optional right-slot for search etc. */
-  rightSlot?: React.ReactNode;
+  rightSlot?: ReactNode;
 }
 
 export function LocationTierBar({
@@ -57,8 +58,8 @@ export function LocationTierBar({
 
   return (
     <div className="sticky top-16 z-30 border-y border-border bg-ink/95 text-white backdrop-blur supports-[backdrop-filter]:bg-ink/85">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
-        <div className="flex gap-1 rounded-full border border-white/10 bg-white/5 p-1">
+      <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 sm:px-6 lg:flex-row lg:items-center lg:gap-4">
+        <div className="flex w-fit shrink-0 gap-1 rounded-full border border-white/10 bg-white/5 p-1">
           {BALLOT_TIERS.map((t) => {
             const Icon = TIER_ICON[t];
             const active = t === activeTier;
@@ -67,19 +68,20 @@ export function LocationTierBar({
                 key={t}
                 type="button"
                 onClick={() => setActiveTier(t)}
-                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition ${
                   active ? "bg-primary text-ink" : "text-white/70 hover:text-white"
                 }`}
                 aria-pressed={active}
               >
-                <Icon className="h-3.5 w-3.5" />
-                {TIER_META[t].label}
+                <Icon className="h-3.5 w-3.5 shrink-0" />
+                <span className="hidden sm:inline">{TIER_META[t].label}</span>
+                <span className="sm:hidden">{t === "county" ? "County" : t === "constituency" ? "Const." : "Ward"}</span>
               </button>
             );
           })}
         </div>
 
-        <div className="ml-auto flex flex-1 flex-wrap items-center justify-end gap-2">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 lg:justify-end">
           <LocationSelect
             icon={MapPin}
             placeholder="Select county"
@@ -123,7 +125,7 @@ export function LocationTierBar({
               isHome={!!homeLocation?.ward && homeLocation.ward === ward}
             />
           )}
-          {rightSlot}
+          {rightSlot ? <div className="shrink-0">{rightSlot}</div> : null}
         </div>
       </div>
     </div>
@@ -150,24 +152,24 @@ function LocationSelect({
   return (
     <Select value={value || undefined} onValueChange={onChange}>
       <SelectTrigger
-        className={`h-9 min-w-[180px] bg-white/5 text-sm text-white hover:bg-white/10 focus:ring-primary/40 [&>svg]:text-white/60 ${
+        className={`h-9 w-[10.5rem] shrink-0 rounded-full bg-white/5 px-3 text-sm text-white hover:bg-white/10 focus:ring-primary/40 [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:shrink-0 [&>svg]:opacity-60 [&>svg]:text-white/60 ${
           isHome ? "border-primary/60 ring-1 ring-primary/40" : "border-white/15"
         }`}
       >
-        <div className="flex items-center gap-2">
-          <Icon className={`h-3.5 w-3.5 ${isHome ? "text-primary" : "text-primary"}`} />
-          <SelectValue placeholder={placeholder} />
+        <span className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
+          <Icon className="h-3.5 w-3.5 shrink-0 text-primary" />
+          <SelectValue placeholder={placeholder} className="truncate" />
           {isHome && (
-            <span className="rounded-full bg-primary/25 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+            <span className="shrink-0 rounded-full bg-primary/25 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
               home
             </span>
           )}
           {badge && !isHome && (
-            <span className="ml-1 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] tabular-nums text-white/70">
+            <span className="shrink-0 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] tabular-nums text-white/70">
               {badge}
             </span>
           )}
-        </div>
+        </span>
       </SelectTrigger>
       <SelectContent className="max-h-72">
         {options.map((o) => (

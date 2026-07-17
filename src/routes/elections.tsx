@@ -380,7 +380,7 @@ function ElectionsPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search candidate…"
-              className="h-9 w-56 border-white/15 bg-white/5 pl-8 text-sm text-white placeholder:text-white/40 focus-visible:ring-primary/40"
+              className="h-9 w-48 rounded-full border-white/15 bg-white/5 pl-8 text-sm text-white placeholder:text-white/40 focus-visible:ring-primary/40"
             />
           </div>
         }
