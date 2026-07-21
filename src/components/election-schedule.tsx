@@ -1,5 +1,6 @@
-import { useMemo } from "react";
-import { CalendarDays, Clock, MapPin } from "lucide-react";
+import { useMemo, useRef } from "react";
+import { CalendarDays, ChevronLeft, ChevronRight, Clock, MapPin } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   DATE_FMT,
   REGION_SCHEDULE,
@@ -95,48 +96,100 @@ export function ElectionSchedule({ voterCounty }: { voterCounty?: string | null 
           )}
         </div>
 
-        <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {REGION_SCHEDULE.map((r) => {
-            const s = pollStatus(r, now);
-            const isMine = myRegion?.region === r.region;
-            const isFocus = focus.region === r.region;
-            return (
-              <div
-                key={r.region}
-                className={`rounded-xl border px-3 py-2.5 text-xs transition ${
-                  isFocus
-                    ? "border-primary/60 bg-primary/10"
-                    : isMine
-                      ? "border-primary/40 bg-primary/5"
-                      : "border-border bg-background/40"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="font-display text-sm text-ink">{r.region}</div>
-                  <span
-                    className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                      s === "open"
-                        ? "bg-flag-green text-white"
-                        : s === "upcoming"
-                          ? "bg-flag-red/90 text-white"
-                          : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    {s === "open" ? "Open" : s === "upcoming" ? "Upcoming" : "Closed"}
-                  </span>
-                </div>
-                <div className="mt-1 text-muted-foreground">
-                  {DATE_FMT.format(new Date(r.opensAt))} · {pad(8)}:00–{pad(18)}:00 EAT
-                </div>
-                <div className="mt-1 line-clamp-2 text-[11px] text-muted-foreground/80">
-                  {r.counties.join(", ")}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <RegionCarousel now={now} myRegion={myRegion} focus={focus} />
       </div>
     </section>
+  );
+}
+
+function RegionCarousel({
+  now,
+  myRegion,
+  focus,
+}: {
+  now: number;
+  myRegion?: RegionSchedule;
+  focus: RegionSchedule;
+}) {
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+
+  const scrollBy = (dir: 1 | -1) => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir * Math.round(el.clientWidth * 0.9), behavior: "smooth" });
+  };
+
+  return (
+    <div className="relative mt-5">
+      <div className="mb-2 flex items-center justify-between">
+        <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+          All regions
+        </div>
+        <div className="flex gap-1.5">
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label="Previous regions"
+            className="h-8 w-8"
+            onClick={() => scrollBy(-1)}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label="Next regions"
+            className="h-8 w-8"
+            onClick={() => scrollBy(1)}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+      <div
+        ref={scrollerRef}
+        className="flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth pb-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {REGION_SCHEDULE.map((r) => {
+          const s = pollStatus(r, now);
+          const isMine = myRegion?.region === r.region;
+          const isFocus = focus.region === r.region;
+          return (
+            <div
+              key={r.region}
+              className={`w-[260px] shrink-0 snap-start rounded-xl border px-3 py-2.5 text-xs transition sm:w-[280px] ${
+                isFocus
+                  ? "border-primary/60 bg-primary/10"
+                  : isMine
+                    ? "border-primary/40 bg-primary/5"
+                    : "border-border bg-background/40"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="font-display text-sm text-ink">{r.region}</div>
+                <span
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                    s === "open"
+                      ? "bg-flag-green text-white"
+                      : s === "upcoming"
+                        ? "bg-flag-red/90 text-white"
+                        : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {s === "open" ? "Open" : s === "upcoming" ? "Upcoming" : "Closed"}
+                </span>
+              </div>
+              <div className="mt-1 text-muted-foreground">
+                {DATE_FMT.format(new Date(r.opensAt))} · {pad(8)}:00–{pad(18)}:00 EAT
+              </div>
+              <div className="mt-1 line-clamp-2 text-[11px] text-muted-foreground/80">
+                {r.counties.join(", ")}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

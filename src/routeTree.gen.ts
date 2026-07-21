@@ -11,12 +11,14 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as RegisterRouteImport } from './routes/register'
+import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as ElectionsRouteImport } from './routes/elections'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as CandidatesRouteImport } from './routes/candidates'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ElectionsIndexRouteImport } from './routes/elections.index'
 import { Route as CandidatesIndexRouteImport } from './routes/candidates.index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as VerifyCertificateNumberRouteImport } from './routes/verify.$certificateNumber'
@@ -31,6 +33,7 @@ import { Route as AdminNotAuthorizedRouteImport } from './routes/admin/not-autho
 import { Route as AdminMfaRequiredRouteImport } from './routes/admin/mfa-required'
 import { Route as AdminCandidatesRouteImport } from './routes/admin/candidates'
 import { Route as AdminAuditRouteImport } from './routes/admin/audit'
+import { Route as ElectionsCandidatesPositionIdRouteImport } from './routes/elections.candidates.$positionId'
 import { Route as CandidatesCandidateIdDashboardRouteImport } from './routes/candidates.$candidateId.dashboard'
 import { Route as CandidatesCandidateIdCertificateRouteImport } from './routes/candidates.$candidateId.certificate'
 
@@ -42,6 +45,11 @@ const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
   path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProjectsRoute = ProjectsRouteImport.update({
+  id: '/projects',
+  path: '/projects',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ElectionsRoute = ElectionsRouteImport.update({
@@ -73,6 +81,11 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const ElectionsIndexRoute = ElectionsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ElectionsRoute,
 } as any)
 const CandidatesIndexRoute = CandidatesIndexRouteImport.update({
   id: '/',
@@ -144,6 +157,12 @@ const AdminAuditRoute = AdminAuditRouteImport.update({
   path: '/admin/audit',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ElectionsCandidatesPositionIdRoute =
+  ElectionsCandidatesPositionIdRouteImport.update({
+    id: '/candidates/$positionId',
+    path: '/candidates/$positionId',
+    getParentRoute: () => ElectionsRoute,
+  } as any)
 const CandidatesCandidateIdDashboardRoute =
   CandidatesCandidateIdDashboardRouteImport.update({
     id: '/$candidateId/dashboard',
@@ -164,6 +183,7 @@ export interface FileRoutesByFullPath {
   '/candidates': typeof CandidatesRouteWithChildren
   '/dashboard': typeof DashboardRoute
   '/elections': typeof ElectionsRouteWithChildren
+  '/projects': typeof ProjectsRoute
   '/register': typeof RegisterRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin/audit': typeof AdminAuditRoute
@@ -180,15 +200,17 @@ export interface FileRoutesByFullPath {
   '/verify/$certificateNumber': typeof VerifyCertificateNumberRoute
   '/admin/': typeof AdminIndexRoute
   '/candidates/': typeof CandidatesIndexRoute
+  '/elections/': typeof ElectionsIndexRoute
   '/candidates/$candidateId/certificate': typeof CandidatesCandidateIdCertificateRoute
   '/candidates/$candidateId/dashboard': typeof CandidatesCandidateIdDashboardRoute
+  '/elections/candidates/$positionId': typeof ElectionsCandidatesPositionIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/auth': typeof AuthRoute
   '/dashboard': typeof DashboardRoute
-  '/elections': typeof ElectionsRouteWithChildren
+  '/projects': typeof ProjectsRoute
   '/register': typeof RegisterRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin/audit': typeof AdminAuditRoute
@@ -205,8 +227,10 @@ export interface FileRoutesByTo {
   '/verify/$certificateNumber': typeof VerifyCertificateNumberRoute
   '/admin': typeof AdminIndexRoute
   '/candidates': typeof CandidatesIndexRoute
+  '/elections': typeof ElectionsIndexRoute
   '/candidates/$candidateId/certificate': typeof CandidatesCandidateIdCertificateRoute
   '/candidates/$candidateId/dashboard': typeof CandidatesCandidateIdDashboardRoute
+  '/elections/candidates/$positionId': typeof ElectionsCandidatesPositionIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -216,6 +240,7 @@ export interface FileRoutesById {
   '/candidates': typeof CandidatesRouteWithChildren
   '/dashboard': typeof DashboardRoute
   '/elections': typeof ElectionsRouteWithChildren
+  '/projects': typeof ProjectsRoute
   '/register': typeof RegisterRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin/audit': typeof AdminAuditRoute
@@ -232,8 +257,10 @@ export interface FileRoutesById {
   '/verify/$certificateNumber': typeof VerifyCertificateNumberRoute
   '/admin/': typeof AdminIndexRoute
   '/candidates/': typeof CandidatesIndexRoute
+  '/elections/': typeof ElectionsIndexRoute
   '/candidates/$candidateId/certificate': typeof CandidatesCandidateIdCertificateRoute
   '/candidates/$candidateId/dashboard': typeof CandidatesCandidateIdDashboardRoute
+  '/elections/candidates/$positionId': typeof ElectionsCandidatesPositionIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -244,6 +271,7 @@ export interface FileRouteTypes {
     | '/candidates'
     | '/dashboard'
     | '/elections'
+    | '/projects'
     | '/register'
     | '/sitemap.xml'
     | '/admin/audit'
@@ -260,15 +288,17 @@ export interface FileRouteTypes {
     | '/verify/$certificateNumber'
     | '/admin/'
     | '/candidates/'
+    | '/elections/'
     | '/candidates/$candidateId/certificate'
     | '/candidates/$candidateId/dashboard'
+    | '/elections/candidates/$positionId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/about'
     | '/auth'
     | '/dashboard'
-    | '/elections'
+    | '/projects'
     | '/register'
     | '/sitemap.xml'
     | '/admin/audit'
@@ -285,8 +315,10 @@ export interface FileRouteTypes {
     | '/verify/$certificateNumber'
     | '/admin'
     | '/candidates'
+    | '/elections'
     | '/candidates/$candidateId/certificate'
     | '/candidates/$candidateId/dashboard'
+    | '/elections/candidates/$positionId'
   id:
     | '__root__'
     | '/'
@@ -295,6 +327,7 @@ export interface FileRouteTypes {
     | '/candidates'
     | '/dashboard'
     | '/elections'
+    | '/projects'
     | '/register'
     | '/sitemap.xml'
     | '/admin/audit'
@@ -311,8 +344,10 @@ export interface FileRouteTypes {
     | '/verify/$certificateNumber'
     | '/admin/'
     | '/candidates/'
+    | '/elections/'
     | '/candidates/$candidateId/certificate'
     | '/candidates/$candidateId/dashboard'
+    | '/elections/candidates/$positionId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -322,6 +357,7 @@ export interface RootRouteChildren {
   CandidatesRoute: typeof CandidatesRouteWithChildren
   DashboardRoute: typeof DashboardRoute
   ElectionsRoute: typeof ElectionsRouteWithChildren
+  ProjectsRoute: typeof ProjectsRoute
   RegisterRoute: typeof RegisterRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   AdminAuditRoute: typeof AdminAuditRoute
@@ -351,6 +387,13 @@ declare module '@tanstack/react-router' {
       path: '/register'
       fullPath: '/register'
       preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/projects': {
+      id: '/projects'
+      path: '/projects'
+      fullPath: '/projects'
+      preLoaderRoute: typeof ProjectsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/elections': {
@@ -394,6 +437,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/elections/': {
+      id: '/elections/'
+      path: '/'
+      fullPath: '/elections/'
+      preLoaderRoute: typeof ElectionsIndexRouteImport
+      parentRoute: typeof ElectionsRoute
     }
     '/candidates/': {
       id: '/candidates/'
@@ -493,6 +543,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAuditRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/elections/candidates/$positionId': {
+      id: '/elections/candidates/$positionId'
+      path: '/candidates/$positionId'
+      fullPath: '/elections/candidates/$positionId'
+      preLoaderRoute: typeof ElectionsCandidatesPositionIdRouteImport
+      parentRoute: typeof ElectionsRoute
+    }
     '/candidates/$candidateId/dashboard': {
       id: '/candidates/$candidateId/dashboard'
       path: '/$candidateId/dashboard'
@@ -530,10 +587,14 @@ const CandidatesRouteWithChildren = CandidatesRoute._addFileChildren(
 
 interface ElectionsRouteChildren {
   ElectionsPositionIdRoute: typeof ElectionsPositionIdRoute
+  ElectionsIndexRoute: typeof ElectionsIndexRoute
+  ElectionsCandidatesPositionIdRoute: typeof ElectionsCandidatesPositionIdRoute
 }
 
 const ElectionsRouteChildren: ElectionsRouteChildren = {
   ElectionsPositionIdRoute: ElectionsPositionIdRoute,
+  ElectionsIndexRoute: ElectionsIndexRoute,
+  ElectionsCandidatesPositionIdRoute: ElectionsCandidatesPositionIdRoute,
 }
 
 const ElectionsRouteWithChildren = ElectionsRoute._addFileChildren(
@@ -547,6 +608,7 @@ const rootRouteChildren: RootRouteChildren = {
   CandidatesRoute: CandidatesRouteWithChildren,
   DashboardRoute: DashboardRoute,
   ElectionsRoute: ElectionsRouteWithChildren,
+  ProjectsRoute: ProjectsRoute,
   RegisterRoute: RegisterRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   AdminAuditRoute: AdminAuditRoute,

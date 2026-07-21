@@ -71,6 +71,18 @@ function AboutPage() {
     <div className="min-h-screen bg-background">
       <SiteHeader />
 
+      {/* Sticky M-Taji alert */}
+      <div className="sticky top-0 z-50 border-b border-primary/30 bg-gradient-gold px-4 py-2.5 text-center shadow-sm">
+        <a
+          href="https://m-taji-tracker.vercel.app"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-primary-foreground hover:underline"
+        >
+          See MY-KDM on M-Taji <ExternalLink className="h-4 w-4" />
+        </a>
+      </div>
+
       {/* Hero */}
       <section className="border-b border-border bg-gradient-to-b from-primary/5 to-background">
         <div className="mx-auto max-w-4xl px-4 py-16 sm:px-6 md:py-24">
@@ -156,44 +168,7 @@ function AboutPage() {
       </Section>
 
       {/* Structure */}
-      <Section
-        eyebrow="04 · Structure"
-        title={
-          <>
-            <span className="text-ink">National to</span>{" "}
-            <span className="text-gradient-gold">grassroots</span>{" "}
-            <span className="text-accent">leadership</span>
-          </>
-        }
-        tone="alt"
-      >
-        <ul className="grid gap-4 md:grid-cols-2">
-          <StructureItem
-            name="National Secretariat"
-            body="Chair, CEO and national office bearers providing strategic direction and national coordination."
-          />
-          <StructureItem
-            name="County Youth Commander"
-            body="Coordinates county-level youth engagement across all 47 counties."
-          />
-          <StructureItem
-            name="Constituency Youth Commander"
-            body="Coordinates constituency-level mobilisation and reporting."
-          />
-          <StructureItem
-            name="Ward / Location Heads"
-            body="Lead grassroots mobilisation and reporting at ward and location level."
-          />
-          <StructureItem
-            name="Village Youth Units"
-            body="Local units of ~1,000 youth per ward driving last-mile delivery and two-way data flow via M-Taji."
-          />
-          <StructureItem
-            name="Elected on-platform"
-            body="Every seat — national, county, constituency and ward — is filled through electronic voting on this platform."
-          />
-        </ul>
-      </Section>
+      <StructureCarousel />
 
       {/* Secretariat carousel */}
       <SecretariatCarousel />
@@ -247,38 +222,7 @@ function AboutPage() {
           <RoadmapItem phase="Phase 4" title="Economic Empowerment Programmes" />
         </ol>
 
-        <div className="mt-8 grid gap-4 sm:grid-cols-2">
-          {(
-            [
-              {
-                name: "Youth economic empowerment",
-                body: "Through a public project ecosystem — jobs, contracts, ambassadorship, innovation, volunteering and content creation.",
-                Icon: Briefcase,
-                tone: "gold",
-              },
-              {
-                name: "Education scholarships & entrepreneurship training",
-                body: "Bursaries, mentorship and practical business bootcamps that turn hustles into real ventures.",
-                Icon: GraduationCap,
-                tone: "green",
-              },
-              {
-                name: "Advocacy and policy influence",
-                body: "Turning organised youth voice into partnerships, opportunities and policy weight.",
-                Icon: Megaphone,
-                tone: "gold",
-              },
-              {
-                name: "Philanthropy",
-                body: "Charity walks, tree planting and sports fundraising initiatives led by young people ward by ward.",
-                Icon: HeartHandshake,
-                tone: "green",
-              },
-            ] as const
-          ).map((track) => (
-            <ProgrammeCard key={track.name} {...track} />
-          ))}
-        </div>
+        <ProgrammesCarousel />
       </Section>
 
       {/* Connect */}
@@ -425,12 +369,113 @@ function Section({
   );
 }
 
-function StructureItem({ name, body }: { name: string; body: string }) {
+function StructureCarousel() {
+  const items = [
+    {
+      name: "National Secretariat",
+      body: "Chair, CEO and national office bearers providing strategic direction and national coordination.",
+    },
+    {
+      name: "County Youth Commander",
+      body: "Coordinates county-level youth engagement across all 47 counties.",
+    },
+    {
+      name: "Constituency Youth Commander",
+      body: "Coordinates constituency-level mobilisation and reporting.",
+    },
+    {
+      name: "Ward / Location Heads",
+      body: "Lead grassroots mobilisation and reporting at ward and location level.",
+    },
+    {
+      name: "Village Youth Units",
+      body: "Local units of ~1,000 youth per ward driving last-mile delivery and two-way data flow via M-Taji.",
+    },
+    {
+      name: "Elected on-platform",
+      body: "Every seat — national, county, constituency and ward — is filled through electronic voting on this platform.",
+    },
+  ];
+  const loop = [...items, ...items];
+
   return (
-    <li className="rounded-2xl border border-border bg-card p-5">
-      <div className="font-display text-lg text-ink">{name}</div>
-      <p className="mt-1 text-sm text-muted-foreground">{body}</p>
-    </li>
+    <section className="border-y border-border bg-secondary/40">
+      <div className="mx-auto max-w-4xl px-4 py-14 sm:px-6 md:py-16">
+        <div className="text-xs uppercase tracking-widest text-flag-red">04 · Structure</div>
+        <h2 className="mt-2 font-display text-3xl md:text-4xl">
+          <span className="text-ink">National to</span>{" "}
+          <span className="text-gradient-gold">grassroots</span>{" "}
+          <span className="text-accent">leadership</span>
+        </h2>
+      </div>
+
+      <div className="group relative overflow-hidden pb-16">
+        <div
+          className="flex w-max gap-5 px-6 animate-secretariat-marquee group-hover:[animation-play-state:paused]"
+          style={{ animationDuration: `${Math.max(items.length * 6, 30)}s` }}
+        >
+          {loop.map((item, i) => (
+            <article
+              key={`${item.name}-${i}`}
+              className="flex w-[300px] shrink-0 flex-col rounded-2xl border border-border bg-card p-6"
+            >
+              <div className="grid h-12 w-12 place-items-center rounded-full bg-primary/15 font-display text-xl text-primary">
+                {(i % items.length) + 1}
+              </div>
+              <div className="mt-4 font-display text-lg text-ink">{item.name}</div>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{item.body}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ProgrammesCarousel() {
+  const tracks = [
+    {
+      name: "Youth economic empowerment",
+      body: "Through a public project ecosystem — jobs, contracts, ambassadorship, innovation, volunteering and content creation.",
+      Icon: Briefcase,
+      tone: "gold" as const,
+    },
+    {
+      name: "Education scholarships & entrepreneurship training",
+      body: "Bursaries, mentorship and practical business bootcamps that turn hustles into real ventures.",
+      Icon: GraduationCap,
+      tone: "green" as const,
+    },
+    {
+      name: "Advocacy and policy influence",
+      body: "Turning organised youth voice into partnerships, opportunities and policy weight.",
+      Icon: Megaphone,
+      tone: "gold" as const,
+    },
+    {
+      name: "Philanthropy",
+      body: "Charity walks, tree planting and sports fundraising initiatives led by young people ward by ward.",
+      Icon: HeartHandshake,
+      tone: "green" as const,
+    },
+  ];
+  const loop = [...tracks, ...tracks];
+
+  return (
+    <div className="mt-8">
+      <div className="group relative overflow-hidden pb-2">
+        <div
+          className="flex w-max gap-5 animate-secretariat-marquee group-hover:[animation-play-state:paused]"
+          style={{ animationDuration: `${Math.max(tracks.length * 8, 32)}s` }}
+        >
+          {loop.map((track, i) => (
+            <div key={`${track.name}-${i}`} className="w-[320px] shrink-0">
+              <ProgrammeCard {...track} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 

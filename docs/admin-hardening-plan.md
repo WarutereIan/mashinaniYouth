@@ -21,7 +21,7 @@ Last updated: 2026-07-10 (implementation + security hardening complete — audit
 - Frontend: `/admin/users`, `/admin/mfa-required`, rebuilt `/admin/support`, `/admin/positions`, `/admin/audit`; shared `adminRouteLoader` with MFA gate.
 - **MFA fix:** `admin_mfa_enrolled` uses `status = 'verified'` only (`auth.mfa_factors` has no `verified` column on this Supabase version).
 - **Types:** regenerated via `npx supabase gen types typescript --project-id iswdjakcdkwumxywgcby`.
-- **Security (M25):** `REVOKE EXECUTE FROM PUBLIC` on all admin/vote/audit RPCs; `GRANT EXECUTE TO authenticated` only; `write_audit` internal-only; `recount_position` gained `is_admin()` guard; `tally_by_position_live` switched to `SECURITY INVOKER`.
+- **Security (M25):** `REVOKE EXECUTE FROM PUBLIC` on aAdded a Projects page at /projects listing 10 planned activities with category, status, date and venue, plus a nav link in the header.ll admin/vote/audit RPCs; `GRANT EXECUTE TO authenticated` only; `write_audit` internal-only; `recount_position` gained `is_admin()` guard; `tally_by_position_live` switched to `SECURITY INVOKER`.
 - **Audit result:** 9/10 SQL checks PASS; security advisors FAIL resolved by M25.
 
 ---

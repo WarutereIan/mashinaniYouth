@@ -12,6 +12,7 @@ import {
   TrendingUp,
   Sparkles,
   ExternalLink,
+  UserPlus,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -22,21 +23,18 @@ import heroProfessions from "@/assets/hero-professions.jpg";
 import { mtajiProfileUrl, candidatePhoto } from "@/lib/mtaji";
 import { isSupabaseBackendEnabled } from "@/lib/feature-flags";
 import { getPublicCounters, type PublicCounters } from "@/lib/api/analytics";
+import patron1 from "@/assets/patrons/p1.jpg";
+import patron2 from "@/assets/patrons/p2.jpg";
+import patron3 from "@/assets/patrons/p3.jpg";
+import patron4 from "@/assets/patrons/p4.jpg";
+import patron5 from "@/assets/patrons/p5.jpg";
+import patron6 from "@/assets/patrons/p6.jpg";
 
 export const Route = createFileRoute("/")({
   component: Home,
 });
 
-const FROM_WORDS = [
-  "Ground",
-  "Mashinani",
-  "Ghetto",
-  "Ocha",
-  "Chini",
-  "Backbench",
-  "Hustling",
-  "Brokieness",
-];
+const FROM_WORDS = ["Ground", "Mashinani", "Ghetto", "Ocha", "Chini", "Backbench", "Hustling"];
 const TO_WORDS = ["Singapore", "First World", "Top"];
 
 function TypewriterLine({ words, className }: { words: string[]; className?: string }) {
@@ -77,7 +75,6 @@ function TypewriterLine({ words, className }: { words: string[]; className?: str
 }
 
 function Home() {
-  const tiers = ["national", "county", "constituency", "ward"] as const;
   const supabaseBackend = isSupabaseBackendEnabled();
   const [counters, setCounters] = useState<PublicCounters>({
     countiesOnBallot: 47,
@@ -97,9 +94,9 @@ function Home() {
     <div className="min-h-screen bg-background">
       <SiteHeader />
 
-      {/* Hero — full-bleed cover */}
-      <section className="relative isolate overflow-hidden">
-        <div className="absolute inset-0 -z-10">
+      {/* Hero — image top, content below on white */}
+      <section className="bg-background">
+        <div className="relative h-[55vh] min-h-[320px] w-full overflow-hidden sm:h-[60vh] md:h-[65vh]">
           <img
             src={heroProfessions}
             alt="Young Kenyan professionals from every walk of life — chef, mason, lawyer, boda-boda rider, vendor, businessman, nurse, mechanic and student — standing together."
@@ -107,68 +104,59 @@ function Home() {
             height={1088}
             className="h-full w-full object-cover object-center"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-ink/70 via-ink/60 to-ink/85" />
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,hsl(var(--gold)/0.25),transparent_55%),radial-gradient(ellipse_at_bottom_left,hsl(var(--sage)/0.20),transparent_55%)]" />
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-ink/20" />
         </div>
 
-        <div className="mx-auto flex min-h-[96vh] max-w-5xl flex-col items-center justify-between px-4 pb-4 pt-8 text-center text-white sm:px-6 md:pb-6 md:pt-12">
-          <span className="inline-flex items-center gap-2 rounded-full border border-flag-red bg-flag-red/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-white backdrop-blur">
+        <div className="mx-auto max-w-5xl px-4 pb-10 pt-8 text-center sm:px-6 md:pb-14 md:pt-12">
+          <span className="inline-flex items-center gap-2 rounded-full border border-flag-red bg-flag-red/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-flag-red">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-flag-red" />
             Electronic voting is now open
           </span>
 
-          <div className="w-full">
-            <h1 className="mx-auto max-w-4xl font-display text-4xl leading-[1.05] tracking-tight sm:text-5xl md:text-6xl lg:text-7xl">
-              <span className="text-white">Kutoka</span>{" "}
-              <TypewriterLine words={FROM_WORDS} className="text-gradient-gold" />
-              <br />
-              <span className="text-white">Hadi</span>{" "}
-              <TypewriterLine words={TO_WORDS} className="text-accent" />
-            </h1>
+          <h1 className="mx-auto mt-6 max-w-4xl font-display text-4xl leading-[1.05] tracking-tight text-ink sm:text-5xl md:mt-8 md:text-6xl lg:text-7xl">
+            <span className="text-ink">Kutoka</span>{" "}
+            <TypewriterLine words={FROM_WORDS} className="text-gradient-gold" />
+            <br />
+            <span className="text-ink">Hadi</span>{" "}
+            <TypewriterLine words={TO_WORDS} className="text-accent" />
+          </h1>
 
-            <p className="mx-auto mt-6 max-w-2xl text-base text-white/85 md:text-lg">
-              Mashinani Youth – Kazi Delivery Movement (MY-KDM) is a nationwide youth movement with
-              an elected leadership structure running from the ward level to the National
-              Secretariat. Our mandate is twofold: to support government, political actors, and
-              development partners in public service delivery — and in doing so, open the door for
-              Kenya's youth to actively participate in that delivery and be economically empowered
-              in the process.
-            </p>
+          <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground md:mt-8 md:text-lg">
+            Mashinani Youth - Kazi Delivery Movement (MY-KDM) is a national youth movement,
+            structured from the ward level to the National Secretariat. We help government deliver
+            on its development agenda — and make sure young people are part of that delivery, and
+            are economically empowered through it.
+          </p>
 
-            <div className="mt-9 flex flex-wrap justify-center gap-3">
-              <Button
-                size="lg"
-                variant="outline"
-                className="border border-white/30 border-t-primary bg-white/5 text-base text-white backdrop-blur transition hover:border-primary hover:bg-primary hover:text-primary-foreground"
-                asChild
-              >
-                <Link to="/register">Register to vie</Link>
-              </Button>
-              <Button
-                size="lg"
-                className="bg-gradient-gold text-base text-primary-foreground transition hover:shadow-cta"
-                asChild
-              >
-                <Link to="/elections">
-                  Cast your vote <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
+          <div className="mt-8 flex flex-wrap justify-center gap-3 md:mt-10">
+            <Button
+              size="lg"
+              variant="outline"
+              className="border border-ink/20 border-t-primary bg-background text-base text-ink transition hover:border-primary hover:bg-primary hover:text-primary-foreground"
+              asChild
+            >
+              <Link to="/register">Register to vie</Link>
+            </Button>
+            <Button
+              size="lg"
+              className="bg-gradient-gold text-base text-primary-foreground transition hover:shadow-cta"
+              asChild
+            >
+              <Link to="/elections">
+                Cast your vote <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
 
-              <Button
-                size="lg"
-                variant="outline"
-                className="border border-white/30 border-t-primary bg-white/5 text-base text-white backdrop-blur transition hover:border-primary hover:bg-primary hover:text-primary-foreground"
-                asChild
-              >
-                <a
-                  href="https://m-taji-tracker.vercel.app"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  See MY-KDM on M-Taji <ExternalLink className="ml-2 h-4 w-4" />
-                </a>
-              </Button>
-            </div>
+            <Button
+              size="lg"
+              variant="outline"
+              className="border border-ink/20 border-t-primary bg-background text-base text-ink transition hover:border-primary hover:bg-primary hover:text-primary-foreground"
+              asChild
+            >
+              <Link to="/auth" search={{ redirect: undefined }}>
+                <UserPlus className="mr-2 h-4 w-4" /> Join as a member
+              </Link>
+            </Button>
           </div>
         </div>
       </section>
@@ -206,79 +194,14 @@ function Home() {
         </div>
       </section>
 
-      {/* Tiers */}
-      <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <div className="text-xs uppercase tracking-widest text-flag-red">
-              Organisational structure
-            </div>
-            <h2 className="mt-1 font-display text-4xl">
-              <span className="text-ink">Four tiers,</span>{" "}
-              <span className="text-gradient-gold">one</span>{" "}
-              <span className="text-accent">movement</span>
-            </h2>
-          </div>
-          <p className="max-w-md text-sm text-muted-foreground">
-            Elections cascade from the National Secretariat down to every ward — no appointments, no
-            shortcuts.
-          </p>
-        </div>
-
-        <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-          {tiers.map((t, i) => (
-            <div
-              key={t}
-              className="group relative overflow-hidden rounded-2xl border border-border bg-card p-6 transition-shadow hover:shadow-lg"
-            >
-              <div className="absolute right-4 top-4 font-display text-6xl text-accent/20">
-                0{i + 1}
-              </div>
-              <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-flag-red/15 text-flag-red">
-                {t === "national" ? (
-                  <Users className="h-5 w-5" />
-                ) : t === "county" ? (
-                  <MapPin className="h-5 w-5" />
-                ) : t === "constituency" ? (
-                  <Building2 className="h-5 w-5" />
-                ) : (
-                  <Vote className="h-5 w-5" />
-                )}
-              </div>
-              <h3 className="mt-4 font-display text-2xl">{TIER_META[t].label}</h3>
-              <p className="mt-2 text-sm text-muted-foreground">{TIER_META[t].blurb}</p>
-              <div className="mt-5 flex items-center justify-between text-sm">
-                {t === "national" ? (
-                  <span />
-                ) : (
-                  <span className="text-muted-foreground">
-                    {POSITIONS.filter((p) => p.tier === t).length} positions
-                  </span>
-                )}
-                {t === "national" ? (
-                  <Link
-                    to="/about"
-                    hash="secretariat"
-                    className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
-                  >
-                    View secretariat <ArrowRight className="h-3.5 w-3.5" />
-                  </Link>
-                ) : (
-                  <Link
-                    to="/elections"
-                    className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
-                  >
-                    View ballot <ArrowRight className="h-3.5 w-3.5" />
-                  </Link>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
+      {/* Tiers carousel */}
+      <TiersCarousel />
 
       {/* Contestants — M-taji style */}
       <ContestantsSection />
+
+      {/* Patrons */}
+      <PatronsSection />
 
       {/* Process */}
       <section className="bg-ink text-white">
@@ -435,6 +358,132 @@ const TIER_ICON: Record<Tier, typeof Users> = {
   ward: Vote,
 };
 
+function TiersCarousel() {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [paused, setPaused] = useState(false);
+
+  const scrollBy = (dir: 1 | -1) => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir * (el.clientWidth * 0.85), behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    if (paused) return;
+    const el = scrollerRef.current;
+    if (!el) return;
+    const id = window.setInterval(() => {
+      if (!el) return;
+      const nearEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 8;
+      if (nearEnd) {
+        el.scrollTo({ left: 0, behavior: "smooth" });
+      } else {
+        el.scrollBy({ left: el.clientWidth * 0.85, behavior: "smooth" });
+      }
+    }, 4500);
+    return () => window.clearInterval(id);
+  }, [paused]);
+
+  return (
+    <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <div className="text-xs uppercase tracking-widest text-flag-red">
+            Organisational structure
+          </div>
+          <h2 className="mt-1 font-display text-4xl">
+            <span className="text-ink">Four tiers,</span>{" "}
+            <span className="text-gradient-gold">one</span>{" "}
+            <span className="text-accent">movement</span>
+          </h2>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => scrollBy(-1)}
+            className="grid h-10 w-10 place-items-center rounded-full border border-border bg-background text-muted-foreground transition hover:bg-secondary"
+            aria-label="Scroll left"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollBy(1)}
+            className="grid h-10 w-10 place-items-center rounded-full border border-primary/40 bg-primary/10 text-primary transition hover:bg-primary/20"
+            aria-label="Scroll right"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      <div
+        ref={scrollerRef}
+        onMouseEnter={() => setPaused(true)}
+        onMouseLeave={() => setPaused(false)}
+        onTouchStart={() => setPaused(true)}
+        onTouchEnd={() => setPaused(false)}
+        className="mt-8 flex snap-x snap-mandatory gap-5 overflow-x-auto pb-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {TIER_ORDER.map((t, i) => {
+          const Icon = TIER_ICON[t];
+          return (
+            <div
+              key={t}
+              className="group relative w-[280px] shrink-0 snap-start overflow-hidden rounded-2xl border border-border bg-card p-6 transition-shadow hover:shadow-lg sm:w-[300px]"
+            >
+              <div className="absolute right-4 top-4 font-display text-6xl text-accent/20">
+                0{i + 1}
+              </div>
+              <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-flag-red/15 text-flag-red">
+                <Icon className="h-5 w-5" />
+              </div>
+              <h3 className="mt-4 font-display text-2xl">{TIER_META[t].label}</h3>
+              <p className="mt-2 text-sm text-muted-foreground">{TIER_META[t].blurb}</p>
+              <div className="mt-5 flex items-center justify-between text-sm">
+                {t === "national" ? (
+                  <span />
+                ) : (
+                  <span className="text-muted-foreground">
+                    {POSITIONS.filter((p) => p.tier === t).length} positions
+                  </span>
+                )}
+                {t === "national" ? (
+                  <Link
+                    to="/about"
+                    hash="secretariat"
+                    className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+                  >
+                    View secretariat <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                ) : (
+                  <Link
+                    to="/elections"
+                    className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+                  >
+                    View ballot <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-3 flex items-center justify-center gap-1.5">
+        {TIER_ORDER.map((t, i) => (
+          <span
+            key={t}
+            className={`h-1.5 rounded-full transition-all ${
+              i === 0 ? "w-6 bg-primary" : "w-1.5 bg-border"
+            }`}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function ContestantsSection() {
   const [activeTier, setActiveTier] = useState<Tier>("national");
   const positions = POSITIONS.filter((p) => p.tier === activeTier);
@@ -477,13 +526,16 @@ function ContestantsSection() {
               <Sparkles className="h-3 w-3" /> Featured contestants
             </span>
             <h2 className="mt-4 font-display text-4xl leading-tight md:text-5xl">
-              <span className="text-ink">Leaders running a</span>{" "}
-              <span className="text-gradient-gold">smarter</span>{" "}
-              <span className="text-accent">campaign</span>{" "}
-              <span className="text-ink">on M-Taji.</span>
+              <span className="text-ink">Mashinani Youth</span>{" "}
+              <span className="text-gradient-gold">Leadership:</span>{" "}
+              <TypewriterLine
+                words={["New face of Youth Leadership in Kenya", "The new home of youth in Kenya"]}
+                className="text-accent"
+              />
             </h2>
             <p className="mt-3 text-sm text-muted-foreground md:text-base">
-              From the National Secretariat to your ward — meet the certified aspirants and open
+              The National Secretariat and County Youth Commanders are duly elected and in office.
+              Constituency and Ward elections are upcoming — meet the certified aspirants and open
               their live M-Taji profile to see their manifesto, projects and receipts.
             </p>
           </div>
@@ -513,6 +565,7 @@ function ContestantsSection() {
           {TIER_ORDER.map((t) => {
             const Icon = TIER_ICON[t];
             const active = activeTier === t;
+            const elected = t === "national" || t === "county";
             return (
               <button
                 key={t}
@@ -526,6 +579,19 @@ function ContestantsSection() {
               >
                 <Icon className="h-3.5 w-3.5" />
                 {TIER_META[t].label}
+                <span
+                  className={`ml-1 rounded-full px-1.5 py-0.5 text-[9px] tracking-wider ${
+                    elected
+                      ? active
+                        ? "bg-white/25 text-white"
+                        : "bg-accent/15 text-accent"
+                      : active
+                        ? "bg-white/25 text-white"
+                        : "bg-flag-red/15 text-flag-red"
+                  }`}
+                >
+                  {elected ? "Elected" : "Upcoming"}
+                </span>
               </button>
             );
           })}
@@ -654,6 +720,158 @@ function FeaturedCandidateCard({
           View profile on M-Taji <ExternalLink className="h-3.5 w-3.5" />
         </a>
       </div>
+    </article>
+  );
+}
+
+type Patron = {
+  id: string;
+  name: string;
+  role: string;
+  category: "Politician" | "Government" | "Industry";
+  bio: string;
+  accent: "gold" | "sage" | "red";
+  photo: string;
+};
+
+const PATRONS: Patron[] = [
+  {
+    id: "p1",
+    name: "Hon. Kalonzo Musyoka",
+    role: "Wiper Democratic Movement Party Leader",
+    category: "Politician",
+    bio: "Veteran statesman and former Vice President championing youth inclusion in national politics.",
+    accent: "gold",
+    photo: patron1,
+  },
+  {
+    id: "p2",
+    name: "Hon. Musalia Mudavadi",
+    role: "Prime Cabinet Secretary, Republic of Kenya",
+    category: "Government",
+    bio: "Coordinates government delivery and foreign affairs — a long-time advocate for youth-led enterprise.",
+    accent: "sage",
+    photo: patron2,
+  },
+  {
+    id: "p3",
+    name: "James Mwangi",
+    role: "Group CEO, Equity Group Holdings",
+    category: "Industry",
+    bio: "Backs young entrepreneurs through the Wings to Fly and Equity Leaders programmes.",
+    accent: "gold",
+    photo: patron3,
+  },
+  {
+    id: "p4",
+    name: "Hon. Martha Karua",
+    role: "People's Liberation Party Leader & Senior Counsel",
+    category: "Politician",
+    bio: "Constitutional lawyer and long-standing voice for accountability, women and youth rights.",
+    accent: "red",
+    photo: patron4,
+  },
+  {
+    id: "p5",
+    name: "Dr. Manu Chandaria",
+    role: "Chairman, Comcraft Group",
+    category: "Industry",
+    bio: "Industrial titan and philanthropist mentoring the next generation of Kenyan founders.",
+    accent: "sage",
+    photo: patron5,
+  },
+  {
+    id: "p6",
+    name: "Prof. Kithure Kindiki",
+    role: "Deputy President, Republic of Kenya",
+    category: "Government",
+    bio: "Scholar and reformer driving security, devolution and opportunity for young Kenyans.",
+    accent: "gold",
+    photo: patron6,
+  },
+];
+
+function PatronsSection() {
+  const loop = [...PATRONS, ...PATRONS];
+  return (
+    <section className="border-t border-border bg-background">
+      <div className="mx-auto max-w-7xl px-4 pt-20 sm:px-6 md:pt-24">
+        <div className="max-w-2xl">
+          <span className="inline-flex items-center gap-2 rounded-full border border-flag-red/30 bg-flag-red/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-flag-red">
+            <Sparkles className="h-3 w-3" /> MY-KDM Patrons
+          </span>
+          <h2 className="mt-4 font-display text-4xl leading-tight md:text-5xl">
+            <span className="text-ink">Backed by</span>{" "}
+            <span className="text-gradient-gold">politicians,</span>{" "}
+            <span className="text-accent">government leaders</span>{" "}
+            <span className="text-ink">and industry titans.</span>
+          </h2>
+          <p className="mt-3 text-sm text-muted-foreground md:text-base">
+            Our patrons open doors, sharpen our policy and mentor young leaders — and every one of
+            them keeps a public M-Taji profile so their support is transparent and trackable.
+          </p>
+        </div>
+      </div>
+
+      <div className="group relative mt-10 overflow-hidden pb-20 md:pb-24">
+        <div
+          className="flex w-max gap-5 px-6 animate-secretariat-marquee group-hover:[animation-play-state:paused]"
+          style={{ animationDuration: `${Math.max(PATRONS.length * 7, 35)}s` }}
+        >
+          {loop.map((p, i) => (
+            <PatronCard key={`${p.id}-${i}`} patron={p} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PatronCard({ patron }: { patron: Patron }) {
+  const ringClass =
+    patron.accent === "gold"
+      ? "bg-gradient-gold"
+      : patron.accent === "sage"
+        ? "bg-accent/30"
+        : "bg-flag-red/30";
+  const chipClass =
+    patron.category === "Politician"
+      ? "bg-flag-red/10 text-flag-red border-flag-red/30"
+      : patron.category === "Government"
+        ? "bg-accent/10 text-accent border-accent/30"
+        : "bg-primary/10 text-primary border-primary/30";
+  return (
+    <article className="group/card flex w-[300px] shrink-0 flex-col overflow-hidden rounded-3xl border border-border bg-card p-6 shadow-soft transition hover:-translate-y-1 hover:shadow-lg">
+      <div
+        className={`mx-auto h-28 w-28 overflow-hidden rounded-full ring-2 ring-white/20 ${ringClass}`}
+      >
+        <img
+          src={patron.photo}
+          alt={`${patron.name} portrait`}
+          loading="lazy"
+          width={1024}
+          height={1024}
+          className="h-full w-full object-cover"
+        />
+      </div>
+      <div className="mt-4 text-center">
+        <span
+          className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest ${chipClass}`}
+        >
+          {patron.category}
+        </span>
+        <h3 className="mt-2 font-display text-lg text-ink">{patron.name}</h3>
+        <p className="text-xs text-muted-foreground">{patron.role}</p>
+      </div>
+      <p className="mt-3 flex-1 text-center text-sm text-muted-foreground">{patron.bio}</p>
+      <a
+        href={mtajiProfileUrl(patron.name)}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full bg-ink px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-ink/90"
+      >
+        View M-Taji profile <ExternalLink className="h-3.5 w-3.5" />
+      </a>
     </article>
   );
 }

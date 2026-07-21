@@ -28,14 +28,18 @@ export default defineConfig({
     baseURL,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
-    video: "retain-on-failure",
+    video: "off",
     actionTimeout: 15_000,
     navigationTimeout: 30_000,
   },
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      use: {
+        ...devices["Desktop Chrome"],
+        // Use installed Chrome when `npx playwright install` hasn't been run (e.g. CI/sandbox).
+        channel: "chrome",
+      },
     },
   ],
   // Do not auto-start the server — the app needs .env + Supabase.

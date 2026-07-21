@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { signOutVoter, useVoter } from "@/lib/voters-source";
 import { supabase } from "@/integrations/supabase/client";
 import { getMyAdminRow } from "@/lib/api/admin-check";
-import logoAsset from "@/assets/mykdm-logo.asset.json";
+import logoUrl from "@/assets/mykdm-logo.jpeg";
 import { MTAJI_BASE } from "@/lib/mtaji";
 import { SupportButton } from "@/components/support-button";
 export { SUPPORT_URL } from "@/lib/support";
@@ -15,6 +15,7 @@ const nav = [
   { to: "/", label: "Home" },
   { to: "/elections", label: "Elections" },
   { to: "/candidates", label: "Candidates" },
+  { to: "/projects", label: "Kazi" },
   { to: "/about", label: "About MY-KDM" },
 ];
 
@@ -84,7 +85,7 @@ export function SiteHeader() {
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
         <Link to="/" className="flex items-center gap-2.5">
           <img
-            src={logoAsset.url}
+            src={logoUrl}
             alt="MY-KDM logo"
             className="h-11 w-11 rounded-lg object-cover shadow-sm ring-1 ring-border"
           />
@@ -269,7 +270,7 @@ export function SiteFooter() {
         <div>
           <div className="flex items-center gap-2.5">
             <img
-              src={logoAsset.url}
+              src={logoUrl}
               alt="MY-KDM logo"
               className="h-11 w-11 rounded-lg object-cover ring-1 ring-white/15"
             />
