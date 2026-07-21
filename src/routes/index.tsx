@@ -687,7 +687,9 @@ function FeaturedCandidateCard({
         <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
           {positionTitle}
         </div>
-        <h3 className="mt-1 truncate font-display text-lg">{candidate.name}</h3>
+        <h3 className="mt-1 truncate font-sans text-lg font-semibold tracking-tight text-ink">
+          {candidate.name}
+        </h3>
         <p className="mt-0.5 text-xs text-muted-foreground">
           Age {candidate.age} · {candidate.county}
         </p>
