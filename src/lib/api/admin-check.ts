@@ -40,12 +40,66 @@ export async function getMyAdminRow(userId?: string): Promise<AdminRow | null> {
   return { user_id: uid, role: "superadmin" };
 }
 
-/** Where to send a user immediately after sign-in. Admins always go to /admin. */
+/**
+ * Detects an abandoned "apply to vie" flow: the account was created with a
+ * vie/both intent (stored in user_metadata at signup) but no candidate
+ * application row exists yet.
+ */
+export async function hasPendingVieApplication(userId?: string): Promise<boolean> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user || (userId && user.id !== userId)) return false;
+
+  const intent = (user.user_metadata as { signup_intent?: string } | undefined)?.signup_intent;
+  if (intent !== "vie" && intent !== "both") return false;
+
+  const { data, error } = await supabase
+    .from("candidates")
+    .select("id")
+    .eq("user_id", user.id)
+    .limit(1);
+  if (error) return false;
+  return (data ?? []).length === 0;
+}
+
+/**
+ * Where to send a user immediately after sign-in / when resuming a session.
+ *
+ * Priority: Admin > pending vie application > explicit ?redirect= >
+ * voter dashboard > submitted candidate list > default /dashboard.
+ */
 export async function resolvePostLoginPath(options?: {
   redirect?: string;
   userId?: string;
 }): Promise<string> {
   const admin = await getMyAdminRow(options?.userId);
   if (admin) return "/admin";
-  return options?.redirect ?? "/dashboard";
+  if (await hasPendingVieApplication(options?.userId)) return "/candidates/apply";
+  if (options?.redirect) return options.redirect;
+
+  let uid = options?.userId;
+  if (!uid) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    uid = user?.id;
+  }
+  if (!uid) return "/dashboard";
+
+  const { data: voter } = await supabase
+    .from("voters")
+    .select("id")
+    .eq("user_id", uid)
+    .maybeSingle();
+  if (voter) return "/dashboard";
+
+  const { data: candidates } = await supabase
+    .from("candidates")
+    .select("id")
+    .eq("user_id", uid)
+    .limit(1);
+  if ((candidates ?? []).length > 0) return "/candidates";
+
+  return "/dashboard";
 }

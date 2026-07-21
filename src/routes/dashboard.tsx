@@ -28,7 +28,8 @@ import {
   tallyPosition as tallyPositionLocal,
 } from "@/lib/voter-store";
 import { signOutVoter, useVoter, voterIdDisplay } from "@/lib/voters-source";
-import { getMyAdminRow } from "@/lib/api/admin-check";
+import { getMyAdminRow, hasPendingVieApplication } from "@/lib/api/admin-check";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/dashboard")({
   ssr: false,
@@ -60,6 +61,7 @@ function DashboardPage() {
   const [candidateCards, setCandidateCards] = useState<Record<string, ElectionCandidate>>({});
   const [vyingPositions, setVyingPositions] = useState<Set<string>>(new Set());
   const [adminChecked, setAdminChecked] = useState(!isSupabaseVotersEnabled());
+  const [pendingVieApplication, setPendingVieApplication] = useState(false);
 
   useEffect(() => {
     if (!supabaseMode || !ready) return;
@@ -76,12 +78,24 @@ function DashboardPage() {
         navigate({ to: "/admin" });
         return;
       }
+      const pendingVie = await hasPendingVieApplication(data.session.user.id);
+      if (cancelled) return;
+      setPendingVieApplication(pendingVie);
       setAdminChecked(true);
     });
     return () => {
       cancelled = true;
     };
   }, [supabaseMode, ready, navigate]);
+
+  // A "vie"-only signup with no application yet has nothing to see here —
+  // send them back to finish applying. "Both" signups (registered voters)
+  // keep their dashboard and get a banner prompt instead.
+  useEffect(() => {
+    if (!adminChecked || !ready || !pendingVieApplication || voter) return;
+    toast.info("Finish your candidate application to appear on the ballot.");
+    navigate({ to: "/candidates/apply" });
+  }, [adminChecked, ready, pendingVieApplication, voter, navigate]);
 
   useEffect(() => {
     fetchPositions()
@@ -214,6 +228,22 @@ function DashboardPage() {
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
+
+      {pendingVieApplication && (
+        <div className="border-b border-accent/30 bg-accent/10">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
+            <p className="text-sm">
+              <span className="font-semibold">You signed up to vie</span> but haven't submitted
+              your candidate application yet.
+            </p>
+            <Button size="sm" className="bg-gradient-gold" asChild>
+              <Link to="/candidates/apply">
+                Finish application <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <section className="border-b border-border/60 bg-gradient-to-b from-primary/5 to-background">

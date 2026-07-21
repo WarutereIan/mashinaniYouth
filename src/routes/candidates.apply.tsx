@@ -51,7 +51,13 @@ const applicationSchema = z.object({
     .min(5, "Kenyan National ID number is required")
     .max(20)
     .regex(/^[0-9A-Za-z-]+$/, "Only letters, numbers and dashes allowed"),
-  iebc_voter_number: z.string().trim().max(30).optional().or(z.literal("")),
+  iebc_voter_number: z
+    .string()
+    .trim()
+    .min(5, "IEBC number is at least 5 characters")
+    .max(30)
+    .optional()
+    .or(z.literal("")),
   phone: z
     .string()
     .trim()
@@ -92,7 +98,8 @@ function ApplyPage() {
     fullName: string;
     nationalId: string;
     phone: string;
-  }>({ fullName: "", nationalId: "", phone: "" });
+    email: string;
+  }>({ fullName: "", nationalId: "", phone: "", email: "" });
   const [identityLoaded, setIdentityLoaded] = useState(false);
 
   useEffect(() => {
@@ -116,7 +123,7 @@ function ApplyPage() {
     let cancelled = false;
 
     async function loadIdentity() {
-      let next = { fullName: "", nationalId: "", phone: "" };
+      let next = { fullName: "", nationalId: "", phone: "", email: "" };
 
       // 1. Identity forwarded straight from the signup flow (same session).
       try {
@@ -131,6 +138,7 @@ function ApplyPage() {
             fullName: parsed.fullName ?? "",
             nationalId: parsed.nationalId ?? "",
             phone: parsed.phone ?? "",
+            email: "",
           };
           sessionStorage.removeItem("mym:signup-identity");
         }
@@ -138,16 +146,25 @@ function ApplyPage() {
         // ignore
       }
 
-      // 2. Fall back to the auth user + voter record for anything still missing.
+      // 2. Fall back to the auth account (metadata + email) then the voter
+      //    record for anything still missing. Metadata is set at signup so
+      //    National ID / phone survive a refresh.
       try {
         const {
           data: { user },
         } = await supabase.auth.getUser();
         if (!cancelled && user) {
-          if (!next.fullName) {
-            next.fullName = (user.user_metadata?.full_name as string | undefined) ?? "";
-          }
-          if (!next.phone || !next.nationalId) {
+          const meta = (user.user_metadata ?? {}) as {
+            full_name?: string;
+            national_id?: string;
+            phone?: string;
+          };
+          if (!next.fullName) next.fullName = meta.full_name ?? "";
+          if (!next.nationalId) next.nationalId = meta.national_id ?? "";
+          if (!next.phone) next.phone = meta.phone ?? "";
+          // Email always comes from the authenticated account.
+          next.email = user.email ?? "";
+          if (!next.phone || !next.fullName) {
             const { data: voter } = await supabase
               .from("voters")
               .select("phone, full_name")
@@ -205,7 +222,7 @@ function ApplyPage() {
       national_id: identity.nationalId || String(fd.get("national_id") ?? ""),
       iebc_voter_number: String(fd.get("iebc_voter_number") ?? ""),
       phone: identity.phone || String(fd.get("phone") ?? ""),
-      email: String(fd.get("email") ?? ""),
+      email: identity.email || String(fd.get("email") ?? ""),
       date_of_birth: String(fd.get("date_of_birth") ?? ""),
       gender: String(fd.get("gender") ?? ""),
       tier,
@@ -343,10 +360,13 @@ function ApplyPage() {
               <p className="text-sm text-muted-foreground">Loading your details…</p>
             ) : (
               <>
-                {(identity.fullName || identity.nationalId || identity.phone) && (
+                {(identity.fullName ||
+                  identity.nationalId ||
+                  identity.phone ||
+                  identity.email) && (
                   <div className="rounded-lg border border-primary/25 bg-primary/5 p-4 text-sm">
                     <div className="font-medium text-primary">From your sign-up</div>
-                    <dl className="mt-2 grid gap-2 sm:grid-cols-3">
+                    <dl className="mt-2 grid gap-2 sm:grid-cols-2">
                       {identity.fullName && (
                         <div>
                           <dt className="text-xs text-muted-foreground">Name</dt>
@@ -363,6 +383,12 @@ function ApplyPage() {
                         <div>
                           <dt className="text-xs text-muted-foreground">Phone</dt>
                           <dd className="font-medium">{identity.phone}</dd>
+                        </div>
+                      )}
+                      {identity.email && (
+                        <div>
+                          <dt className="text-xs text-muted-foreground">Email</dt>
+                          <dd className="font-medium">{identity.email}</dd>
                         </div>
                       )}
                     </dl>
@@ -405,13 +431,15 @@ function ApplyPage() {
                   error={errors["iebc_voter_number"]}
                 />
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field
-                    label="Email (optional)"
-                    name="email"
-                    type="email"
-                    placeholder="you@example.com"
-                    error={errors["email"]}
-                  />
+                  {!identity.email && (
+                    <Field
+                      label="Email (optional)"
+                      name="email"
+                      type="email"
+                      placeholder="you@example.com"
+                      error={errors["email"]}
+                    />
+                  )}
                   <Field
                     label="Date of birth (optional)"
                     name="date_of_birth"
@@ -478,30 +506,7 @@ function ApplyPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label>Ballot position *</Label>
-                <Select value={positionId} onValueChange={setPositionId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select position for your scope" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {positionOptions.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors["position_id"] && (
-                  <p className="text-xs text-flag-red">{errors["position_id"]}</p>
-                )}
-              </div>
             </div>
-            <input
-              type="hidden"
-              name="position_title"
-              value={positionOptions.find((p) => p.id === positionId)?.title ?? ""}
-            />
 
             <div className="grid gap-4 sm:grid-cols-2 hidden">
               <Field
@@ -596,6 +601,46 @@ function ApplyPage() {
                 </div>
               )}
             </div>
+
+            <div className="space-y-1.5">
+              <Label>Ballot position *</Label>
+              <Select
+                value={positionId}
+                onValueChange={setPositionId}
+                disabled={
+                  !county ||
+                  ((tier === "constituency" || tier === "ward") && !constituency) ||
+                  (tier === "ward" && !ward)
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={
+                      !county ||
+                      ((tier === "constituency" || tier === "ward") && !constituency) ||
+                      (tier === "ward" && !ward)
+                        ? "Select the location first"
+                        : "Select position for this location"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {positionOptions.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors["position_id"] && (
+                <p className="text-xs text-flag-red">{errors["position_id"]}</p>
+              )}
+            </div>
+            <input
+              type="hidden"
+              name="position_title"
+              value={positionOptions.find((p) => p.id === positionId)?.title ?? ""}
+            />
 
             <Field
               label="Party / movement (optional)"

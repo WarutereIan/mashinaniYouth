@@ -133,8 +133,6 @@ function AuthPage() {
     });
   }, [navigate, redirect]);
 
-  const afterAuth = () => redirect ?? "/dashboard";
-
   const constituencyOpts = useMemo(
     () => (voter.county ? constituenciesForCounty(voter.county) : []),
     [voter.county],
@@ -165,6 +163,8 @@ function AuthPage() {
     setBusy(false);
     if (dest === "/admin") {
       toast.success("Welcome back, admin!");
+    } else if (dest === "/candidates/apply" && redirect !== "/candidates/apply") {
+      toast.info("Welcome back! You haven't finished your candidate application — complete it below.");
     } else {
       toast.success("Welcome back!");
     }
@@ -249,7 +249,17 @@ function AuthPage() {
       password,
       options: {
         emailRedirectTo: `${window.location.origin}/dashboard`,
-        data: { full_name: name },
+        // Persist identity on the account so the candidate apply page can
+        // auto-fetch it later (National ID / phone) without re-asking — even
+        // after a refresh when sessionStorage is gone.
+        data: {
+          full_name: name,
+          national_id: parsedIdentity.id,
+          phone: parsedIdentity.phone,
+          // Remembered so we can detect an abandoned "apply to vie" flow on
+          // the next visit and prompt the user to finish it.
+          signup_intent: intent,
+        },
       },
     });
     if (error) {

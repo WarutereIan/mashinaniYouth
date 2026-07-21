@@ -5,7 +5,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 const submitSchema = z.object({
   full_name: z.string().trim().min(3).max(120),
   national_id: z.string().trim().min(5).max(20),
-  iebc_voter_number: z.string().trim().max(30).optional().or(z.literal("")),
+  iebc_voter_number: z.string().trim().min(5).max(30).optional().or(z.literal("")),
   phone: z.string().trim().min(7).max(20),
   email: z.string().trim().email().max(255).optional().or(z.literal("")),
   date_of_birth: z.string().optional().or(z.literal("")),

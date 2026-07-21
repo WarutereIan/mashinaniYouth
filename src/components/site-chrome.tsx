@@ -5,7 +5,7 @@ import { FaFacebook, FaInstagram, FaXTwitter, FaYoutube } from "react-icons/fa6"
 import { Button } from "@/components/ui/button";
 import { signOutVoter, useVoter } from "@/lib/voters-source";
 import { supabase } from "@/integrations/supabase/client";
-import { getMyAdminRow } from "@/lib/api/admin-check";
+import { getMyAdminRow, resolvePostLoginPath } from "@/lib/api/admin-check";
 import logoUrl from "@/assets/mykdm-logo.jpeg";
 import { MTAJI_BASE } from "@/lib/mtaji";
 import { SupportButton } from "@/components/support-button";
@@ -20,6 +20,21 @@ const nav = [
 ];
 
 const externalNav = [{ href: `${MTAJI_BASE}/shop/mykdm`, label: "Merchandise" }];
+
+/** Known home destinations from resolvePostLoginPath (for typed Link `to`). */
+type HomePath = "/admin" | "/dashboard" | "/candidates" | "/candidates/apply";
+
+function asHomePath(path: string): HomePath {
+  if (
+    path === "/admin" ||
+    path === "/dashboard" ||
+    path === "/candidates" ||
+    path === "/candidates/apply"
+  ) {
+    return path;
+  }
+  return "/dashboard";
+}
 
 export const MYKDM_SOCIALS = [
   {
@@ -48,9 +63,13 @@ export function SiteHeader() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
 
-  // Auth session awareness so signed-in admins (who have no voter record) still
-  // appear logged in up top, with a route into /admin.
+  // Auth session awareness so anyone signed in (admin, candidate or plain
+  // account without a voter record) appears logged in up top with a Sign out.
+  // authReady avoids flashing Log in before the session probe finishes.
+  const [authReady, setAuthReady] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [authName, setAuthName] = useState<string | null>(null);
+  const [homePath, setHomePath] = useState<HomePath>("/dashboard");
 
   useEffect(() => {
     let cancelled = false;
@@ -59,10 +78,21 @@ export function SiteHeader() {
       if (cancelled) return;
       if (!data.user) {
         setIsAdmin(false);
+        setAuthName(null);
+        setHomePath("/dashboard");
+        setAuthReady(true);
         return;
       }
-      const admin = await getMyAdminRow(data.user.id);
-      if (!cancelled) setIsAdmin(!!admin);
+      const meta = (data.user.user_metadata ?? {}) as { full_name?: string };
+      setAuthName(meta.full_name || data.user.email || "Account");
+      const [admin, dest] = await Promise.all([
+        getMyAdminRow(data.user.id),
+        resolvePostLoginPath({ userId: data.user.id }),
+      ]);
+      if (cancelled) return;
+      setIsAdmin(!!admin);
+      setHomePath(asHomePath(dest));
+      setAuthReady(true);
     };
     void refresh();
     const { data: sub } = supabase.auth.onAuthStateChange(() => {
@@ -77,8 +107,15 @@ export function SiteHeader() {
   const logout = async () => {
     await signOutVoter();
     window.dispatchEvent(new Event("mym:voter-changed"));
+    setIsAdmin(false);
+    setAuthName(null);
+    setHomePath("/dashboard");
     navigate({ to: "/" });
   };
+
+  const signedIn = !!voter || isAdmin || !!authName;
+  const chipName = voter?.name.split(" ")[0] ?? authName?.split(" ")[0] ?? "Account";
+  const chipInitial = (voter?.name ?? authName ?? "A").slice(0, 1).toUpperCase();
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/85 backdrop-blur">
@@ -128,33 +165,29 @@ export function SiteHeader() {
             className="border-flag-red/40 text-flag-red hover:bg-flag-red/10 hover:text-flag-red"
           />
 
-          {voter ? (
+          {!authReady ? null : signedIn ? (
             <>
-              <Link
-                to="/dashboard"
-                className="flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 transition hover:border-primary/40 hover:bg-primary/5"
-              >
-                <span className="grid h-6 w-6 place-items-center rounded-full bg-primary/15 text-[11px] font-semibold text-primary">
-                  {voter.name.slice(0, 1).toUpperCase()}
-                </span>
-                <span className="text-sm font-medium">{voter.name.split(" ")[0]}</span>
-              </Link>
-
-              <Button variant="ghost" size="sm" onClick={logout}>
-                <LogOut className="mr-1.5 h-3.5 w-3.5" /> Sign out
-              </Button>
-            </>
-          ) : isAdmin ? (
-            <>
-              <Link
-                to="/admin"
-                className="flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 transition hover:border-primary/40 hover:bg-primary/5"
-              >
-                <span className="grid h-6 w-6 place-items-center rounded-full bg-primary/15 text-primary">
-                  <Shield className="h-3.5 w-3.5" />
-                </span>
-                <span className="text-sm font-medium">Admin</span>
-              </Link>
+              {isAdmin ? (
+                <Link
+                  to="/admin"
+                  className="flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 transition hover:border-primary/40 hover:bg-primary/5"
+                >
+                  <span className="grid h-6 w-6 place-items-center rounded-full bg-primary/15 text-primary">
+                    <Shield className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="text-sm font-medium">Admin</span>
+                </Link>
+              ) : (
+                <Link
+                  to={homePath}
+                  className="flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 transition hover:border-primary/40 hover:bg-primary/5"
+                >
+                  <span className="grid h-6 w-6 place-items-center rounded-full bg-primary/15 text-[11px] font-semibold text-primary">
+                    {chipInitial}
+                  </span>
+                  <span className="text-sm font-medium">{chipName}</span>
+                </Link>
+              )}
               <Button variant="ghost" size="sm" onClick={logout}>
                 <LogOut className="mr-1.5 h-3.5 w-3.5" /> Sign out
               </Button>
@@ -218,17 +251,21 @@ export function SiteHeader() {
               />
             </div>
             <div className="mt-2 flex gap-2">
-              {voter ? (
-                <Button variant="outline" size="sm" onClick={logout} className="flex-1">
-                  <LogOut className="mr-1.5 h-3.5 w-3.5" /> Sign out ({voter.name.split(" ")[0]})
-                </Button>
-              ) : isAdmin ? (
+              {!authReady ? null : signedIn ? (
                 <>
-                  <Button variant="outline" size="sm" asChild className="flex-1">
-                    <Link to="/admin" onClick={() => setOpen(false)}>
-                      <Shield className="mr-1.5 h-3.5 w-3.5" /> Admin
-                    </Link>
-                  </Button>
+                  {isAdmin ? (
+                    <Button variant="outline" size="sm" asChild className="flex-1">
+                      <Link to="/admin" onClick={() => setOpen(false)}>
+                        <Shield className="mr-1.5 h-3.5 w-3.5" /> Admin
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button variant="outline" size="sm" asChild className="flex-1">
+                      <Link to={homePath} onClick={() => setOpen(false)}>
+                        {chipName}
+                      </Link>
+                    </Button>
+                  )}
                   <Button variant="outline" size="sm" onClick={logout} className="flex-1">
                     <LogOut className="mr-1.5 h-3.5 w-3.5" /> Sign out
                   </Button>
