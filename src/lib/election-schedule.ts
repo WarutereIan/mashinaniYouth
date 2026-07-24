@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { listPollWindows, getCyclePhase, type RegionSchedule } from "@/lib/api/schedule";
+import type { Tier } from "@/lib/tier-meta";
 
-// MY-KDM regional election schedule.
-// Kenya's 8 former provinces vote on consecutive days starting Tue 21 Jul 2026.
-// Polls open 08:00 EAT and close 18:00 EAT.
+export type { RegionSchedule };
 
 export const DATE_FMT = new Intl.DateTimeFormat("en-GB", {
   weekday: "short",
@@ -17,94 +17,14 @@ export const TIME_FMT = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Africa/Nairobi",
 });
 
-export interface RegionSchedule {
-  region: string;
-  counties: string[];
-  /** ISO date (YYYY-MM-DD) of polling day, EAT (UTC+3). */
-  date: string;
-  opensAt: string; // ISO with +03:00
-  closesAt: string; // ISO with +03:00
-}
-
-const day = (d: string): { opensAt: string; closesAt: string; date: string } => ({
-  date: d,
-  opensAt: `${d}T08:00:00+03:00`,
-  closesAt: `${d}T18:00:00+03:00`,
-});
-
-export const REGION_SCHEDULE: RegionSchedule[] = [
-  {
-    region: "Nairobi",
-    counties: ["Nairobi"],
-    ...day("2026-07-21"),
-  },
-  {
-    region: "Central",
-    counties: ["Kiambu", "Kirinyaga", "Murang'a", "Nyandarua", "Nyeri"],
-    ...day("2026-07-22"),
-  },
-  {
-    region: "Coast",
-    counties: ["Kilifi", "Kwale", "Lamu", "Mombasa", "Taita-Taveta", "Tana River"],
-    ...day("2026-07-23"),
-  },
-  {
-    region: "Eastern",
-    counties: [
-      "Embu",
-      "Isiolo",
-      "Kitui",
-      "Machakos",
-      "Makueni",
-      "Marsabit",
-      "Meru",
-      "Tharaka-Nithi",
-    ],
-    ...day("2026-07-24"),
-  },
-  {
-    region: "North Eastern",
-    counties: ["Garissa", "Mandera", "Wajir"],
-    ...day("2026-07-25"),
-  },
-  {
-    region: "Nyanza",
-    counties: ["Homa Bay", "Kisii", "Kisumu", "Migori", "Nyamira", "Siaya"],
-    ...day("2026-07-26"),
-  },
-  {
-    region: "Rift Valley",
-    counties: [
-      "Baringo",
-      "Bomet",
-      "Elgeyo-Marakwet",
-      "Kajiado",
-      "Kericho",
-      "Laikipia",
-      "Nakuru",
-      "Nandi",
-      "Narok",
-      "Samburu",
-      "Trans Nzoia",
-      "Turkana",
-      "Uasin Gishu",
-      "West Pokot",
-    ],
-    ...day("2026-07-27"),
-  },
-  {
-    region: "Western",
-    counties: ["Bungoma", "Busia", "Kakamega", "Vihiga"],
-    ...day("2026-07-28"),
-  },
-];
-
-export const ELECTION_WINDOW_START = REGION_SCHEDULE[0].opensAt;
-export const ELECTION_WINDOW_END = REGION_SCHEDULE[REGION_SCHEDULE.length - 1].closesAt;
-
-export function regionForCounty(county: string): RegionSchedule | undefined {
+export function regionForCounty(
+  county: string,
+  schedule: RegionSchedule[],
+): RegionSchedule | undefined {
   const norm = county.trim().toLowerCase();
-  return REGION_SCHEDULE.find((r) => r.counties.some((c) => c.toLowerCase() === norm));
+  return schedule.find((r) =>
+    r.counties.some((c: string) => c.toLowerCase() === norm),
+  );
 }
 
 export type PollStatus = "upcoming" | "open" | "closed";
@@ -140,6 +60,32 @@ export function pollStatus(
   return "open";
 }
 
+/** True when any regional poll window is currently open. */
+export function anyPollWindowOpen(schedule: RegionSchedule[], now: number): boolean {
+  return schedule.some((r) => pollStatus(r, now) === "open");
+}
+
+/**
+ * Mirrors cast_vote poll gating:
+ * - national: any open window, or cycle phase `scheduled`
+ * - other tiers: voter's county window must be open
+ */
+export function isPollingOpen(opts: {
+  tier: Tier;
+  voterCounty?: string | null;
+  schedule: RegionSchedule[];
+  now: number;
+  cyclePhase?: string | null;
+}): boolean {
+  if (opts.tier === "national") {
+    if (anyPollWindowOpen(opts.schedule, opts.now)) return true;
+    return opts.cyclePhase === "scheduled";
+  }
+  if (!opts.voterCounty) return false;
+  const region = regionForCounty(opts.voterCounty, opts.schedule);
+  return region ? pollStatus(region, opts.now) === "open" : false;
+}
+
 export function useNow(intervalMs = 1000) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -147,4 +93,48 @@ export function useNow(intervalMs = 1000) {
     return () => clearInterval(id);
   }, [intervalMs]);
   return now;
+}
+
+/** Live poll windows from Supabase for the active election cycle. */
+export function usePollSchedule(cycleSlug = "mykdm-2026") {
+  const [schedule, setSchedule] = useState<RegionSchedule[]>([]);
+  const [cyclePhase, setCyclePhase] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setReady(false);
+    Promise.all([listPollWindows(cycleSlug), getCyclePhase(cycleSlug)])
+      .then(([rows, phase]) => {
+        if (cancelled) return;
+        setSchedule(rows);
+        setCyclePhase(phase);
+        setError(null);
+      })
+      .catch((e) => {
+        console.warn("[schedule] load failed:", e);
+        if (cancelled) return;
+        setSchedule([]);
+        setCyclePhase(null);
+        setError(e instanceof Error ? e.message : "Failed to load schedule");
+      })
+      .finally(() => {
+        if (!cancelled) setReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [cycleSlug]);
+
+  const windowStart = useMemo(
+    () => (schedule.length ? schedule[0].opensAt : null),
+    [schedule],
+  );
+  const windowEnd = useMemo(
+    () => (schedule.length ? schedule[schedule.length - 1].closesAt : null),
+    [schedule],
+  );
+
+  return { schedule, cyclePhase, ready, error, windowStart, windowEnd };
 }

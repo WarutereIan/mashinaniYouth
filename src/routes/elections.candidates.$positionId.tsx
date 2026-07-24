@@ -6,11 +6,11 @@ import { SiteHeader, SiteFooter } from "@/components/site-chrome";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CandidateAvatar } from "@/components/candidate-avatar";
-import { DATE_FMT, pollStatus, regionForCounty, useNow } from "@/lib/election-schedule";
+import { DATE_FMT, isPollingOpen, regionForCounty, useNow, usePollSchedule } from "@/lib/election-schedule";
 import { useVoter } from "@/lib/voters-source";
 import { getPositionById } from "@/lib/positions-source";
 import { listCandidatesByPosition } from "@/lib/api/election-candidates";
-import { checkEligibility, usePositionTally, useVoteActions } from "@/lib/votes-source";
+import { checkEligibility, isPositionInVoterLocale, usePositionTally, useVoteActions } from "@/lib/votes-source";
 import { getMyCandidatePositionIds } from "@/lib/candidates";
 import type { ElectionCandidate } from "@/lib/tier-meta";
 
@@ -42,6 +42,7 @@ function AllCandidatesPage() {
   const [myVote, setMyVote] = useState<string | null>(null);
   const [vyingPositions, setVyingPositions] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
+  const { schedule, cyclePhase } = usePollSchedule();
 
   useEffect(() => {
     listCandidatesByPosition(position.id)
@@ -72,10 +73,17 @@ function AllCandidatesPage() {
   }, [position.id, voter, getMyVote]);
 
   const now = useNow();
-  const voterRegion = voter ? regionForCounty(voter.county) : undefined;
-  const pollsOpen = voterRegion ? pollStatus(voterRegion, now) === "open" : false;
+  const voterRegion = voter ? regionForCounty(voter.county, schedule) : undefined;
+  const pollsOpen = isPollingOpen({
+    tier: position.tier,
+    voterCounty: voter?.county,
+    schedule,
+    now,
+    cyclePhase,
+  });
 
   const { eligible, reason } = checkEligibility(voter, position, vyingPositions);
+  const inLocale = !voter || isPositionInVoterLocale(voter, position);
 
   const total = tally.reduce((s, r) => s + r.votes, 0);
 
@@ -101,9 +109,12 @@ function AllCandidatesPage() {
     }
     if (!pollsOpen) {
       toast.error("Voting isn't open yet", {
-        description: voterRegion
-          ? `Your county's polls open on ${DATE_FMT.format(new Date(voterRegion.date))}, 08:00–18:00 EAT.`
-          : "This region's polling window is not open.",
+        description:
+          position.tier === "national"
+            ? "National polls are not open at this time."
+            : voterRegion
+              ? `Your county's polls open on ${DATE_FMT.format(new Date(voterRegion.date))}, 08:00–18:00 EAT.`
+              : "This region's polling window is not open.",
       });
       return;
     }
@@ -166,7 +177,21 @@ function AllCandidatesPage() {
       </div>
 
       <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-        {filtered.length === 0 ? (
+        {voter && !inLocale ? (
+          <div className="rounded-2xl border border-border bg-card p-8 text-center">
+            <div className="inline-flex items-center gap-2 text-sm font-medium">
+              <Lock className="h-4 w-4 text-muted-foreground" />
+              Outside your registered area
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              This seat is not on your ballot. Your registration: {voter.ward}, {voter.constituency},{" "}
+              {voter.county}.
+            </p>
+            <Button className="mt-4" variant="outline" asChild>
+              <Link to="/elections">Back to your ballots</Link>
+            </Button>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
             {candidates.length === 0 ? "No candidates yet." : `No candidates match "${search}".`}
           </div>

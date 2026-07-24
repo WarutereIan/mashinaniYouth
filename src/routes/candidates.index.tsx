@@ -30,6 +30,7 @@ import { listCandidates, type Candidate, type CandidateTier } from "@/lib/candid
 import { verifyCertificate, type CertificateVerification } from "@/lib/api/verify";
 import { LocationTierBar } from "@/components/location-tier-bar";
 import { COUNTY_NAMES, constituenciesForCounty, wardsForConstituency } from "@/lib/locations";
+import { useVoter } from "@/lib/voters-source";
 
 export const Route = createFileRoute("/candidates/")({
   head: () => ({
@@ -46,19 +47,29 @@ export const Route = createFileRoute("/candidates/")({
 });
 
 function CandidatesPage() {
+  const { voter } = useVoter();
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tier, setTier] = useState<CandidateTier>("county");
-  const [county, setCounty] = useState<string>(COUNTY_NAMES[0]);
+  const [county, setCounty] = useState<string>(voter?.county ?? COUNTY_NAMES[0]);
   const [constituency, setConstituency] = useState<string>(
-    constituenciesForCounty(COUNTY_NAMES[0])[0] ?? "",
+    voter?.constituency ?? constituenciesForCounty(COUNTY_NAMES[0])[0] ?? "",
   );
   const [ward, setWard] = useState<string>(
-    wardsForConstituency(constituenciesForCounty(COUNTY_NAMES[0])[0] ?? "")[0] ?? "",
+    voter?.ward ??
+      wardsForConstituency(constituenciesForCounty(COUNTY_NAMES[0])[0] ?? "")[0] ??
+      "",
   );
   const [search, setSearch] = useState("");
   const [verifying, setVerifying] = useState<Candidate | null>(null);
+
+  useEffect(() => {
+    if (!voter) return;
+    setCounty(voter.county);
+    setConstituency(voter.constituency);
+    setWard(voter.ward);
+  }, [voter]);
 
   useEffect(() => {
     let ok = true;
@@ -86,6 +97,7 @@ function CandidatesPage() {
         (c.county !== county || c.constituency !== constituency || c.ward !== ward)
       )
         return false;
+      // national: tier match only — no county/constituency/ward filter
       if (!q) return true;
       return c.full_name.toLowerCase().includes(q) || (c.slogan ?? "").toLowerCase().includes(q);
     });
@@ -125,15 +137,19 @@ function CandidatesPage() {
       {/* Filter bar */}
       <LocationTierBar
         activeTier={tier}
-        setActiveTier={(t) => {
-          if (t === "county" || t === "constituency" || t === "ward") setTier(t);
-        }}
+        setActiveTier={setTier}
         county={county}
         setCounty={setCounty}
         constituency={constituency}
         setConstituency={setConstituency}
         ward={ward}
         setWard={setWard}
+        lockToHome={!!voter}
+        homeLocation={
+          voter
+            ? { county: voter.county, constituency: voter.constituency, ward: voter.ward }
+            : null
+        }
         rightSlot={
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/50" />
@@ -188,13 +204,21 @@ function CandidatesPage() {
 
 function CandidateCard({ candidate, onVerify }: { candidate: Candidate; onVerify: () => void }) {
   const scope =
-    candidate.tier === "county"
-      ? candidate.county
-      : candidate.tier === "constituency"
-        ? `${candidate.constituency}, ${candidate.county}`
-        : `${candidate.ward} — ${candidate.constituency}, ${candidate.county}`;
+    candidate.tier === "national"
+      ? "Nationwide"
+      : candidate.tier === "county"
+        ? candidate.county
+        : candidate.tier === "constituency"
+          ? `${candidate.constituency}, ${candidate.county}`
+          : `${candidate.ward} — ${candidate.constituency}, ${candidate.county}`;
   const TierIcon =
-    candidate.tier === "county" ? MapPin : candidate.tier === "constituency" ? Building2 : Vote;
+    candidate.tier === "national"
+      ? Vote
+      : candidate.tier === "county"
+        ? MapPin
+        : candidate.tier === "constituency"
+          ? Building2
+          : Vote;
 
   return (
     <article className="group relative overflow-hidden rounded-2xl border border-border bg-card transition-shadow hover:shadow-lg">

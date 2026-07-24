@@ -37,29 +37,50 @@ export function useVoteActions() {
 }
 
 export function usePositionTally(positionId: string | null) {
+  return usePositionsTally(positionId ? [positionId] : []);
+}
+
+/** Merged live tallies for one or more ballots (location-scoped candidate lists). */
+export function usePositionsTally(positionIds: string[]) {
   const [tally, setTally] = useState<TallyRow[]>([]);
+  const key = positionIds.slice().sort().join("|");
 
   useEffect(() => {
-    if (!positionId) return;
+    const ids = key ? key.split("|").filter(Boolean) : [];
+    if (!ids.length) {
+      setTally([]);
+      return;
+    }
     let cancelled = false;
 
     const load = () => {
-      tallyPositionApi(positionId)
-        .then((rows) => {
-          if (!cancelled) setTally(rows);
+      Promise.all(ids.map((id) => tallyPositionApi(id)))
+        .then((lists) => {
+          if (cancelled) return;
+          const byCandidate = new Map<string, number>();
+          for (const rows of lists) {
+            for (const row of rows) {
+              byCandidate.set(row.candidateId, (byCandidate.get(row.candidateId) ?? 0) + row.votes);
+            }
+          }
+          setTally(
+            [...byCandidate.entries()]
+              .map(([candidateId, votes]) => ({ candidateId, votes }))
+              .sort((a, b) => b.votes - a.votes),
+          );
         })
         .catch((e) => console.warn("[tally]", e));
     };
 
     load();
-    const unsub = subscribeToPositionVotes(positionId, load);
+    const unsubs = ids.map((id) => subscribeToPositionVotes(id, load));
     const poll = window.setInterval(load, 30_000);
     return () => {
       cancelled = true;
-      unsub();
+      for (const unsub of unsubs) unsub();
       window.clearInterval(poll);
     };
-  }, [positionId]);
+  }, [key]);
 
   return tally;
 }
@@ -78,24 +99,27 @@ export function checkEligibility(
       reason: "You are vying for this seat, so you cannot vote in it",
     };
   }
-  if (position.tier === "national") return { eligible: true };
-  if (position.tier === "county" && position.county === voter.county) return { eligible: true };
-  if (
-    position.tier === "constituency" &&
-    position.county === voter.county &&
-    position.constituency === voter.constituency
-  ) {
-    return { eligible: true };
+  if (!isPositionInVoterLocale(voter, position)) {
+    return { eligible: false, reason: "This seat is outside your registered location" };
   }
-  if (
-    position.tier === "ward" &&
-    position.county === voter.county &&
-    position.constituency === voter.constituency &&
-    position.ward === voter.ward
-  ) {
-    return { eligible: true };
+  return { eligible: true };
+}
+
+/** National is nationwide; subnational seats must match the voter's home hierarchy. */
+export function isPositionInVoterLocale(voter: Voter, position: Position): boolean {
+  if (position.tier === "national") return true;
+  if (position.tier === "county") return position.county === voter.county;
+  if (position.tier === "constituency") {
+    return position.county === voter.county && position.constituency === voter.constituency;
   }
-  return { eligible: false, reason: "This seat is outside your registered location" };
+  if (position.tier === "ward") {
+    return (
+      position.county === voter.county &&
+      position.constituency === voter.constituency &&
+      position.ward === voter.ward
+    );
+  }
+  return false;
 }
 
 export async function fetchElectionTotals(): Promise<{

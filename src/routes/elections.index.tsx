@@ -33,16 +33,17 @@ import { ElectionSchedule } from "@/components/election-schedule";
 import { TIER_META, type ElectionCandidate, type Position, type Tier } from "@/lib/tier-meta";
 import { fetchPositions } from "@/lib/positions-source";
 import { isSupabaseAnalyticsEnabled } from "@/lib/feature-flags";
-import { DATE_FMT, pollStatus, regionForCounty, useNow } from "@/lib/election-schedule";
+import { DATE_FMT, isPollingOpen, pollStatus, regionForCounty, useNow, usePollSchedule } from "@/lib/election-schedule";
 import {
   checkEligibility,
   fetchElectionTotals,
-  usePositionTally,
+  usePositionsTally,
   useVoteActions,
 } from "@/lib/votes-source";
 import { useVoter } from "@/lib/voters-source";
 import { listCandidatesByPosition } from "@/lib/api/election-candidates";
-import { ageSplit, genderSplit, turnoutByScope } from "@/lib/api/analytics";
+import { getMyCandidatePositionIds } from "@/lib/candidates";
+import { ageSplit, genderSplit, getPublicCounters, turnoutByScope } from "@/lib/api/analytics";
 
 export const Route = createFileRoute("/elections/")({
   head: () => ({
@@ -63,13 +64,15 @@ function ElectionsPage() {
   const { voter } = useVoter();
   const { castVote: castVoteAction, getMyVote: getMyVoteAction } = useVoteActions();
   const [activeTier, setActiveTier] = useState<Tier>("county");
-  const [county, setCounty] = useState<string>(voter?.county ?? "Nairobi");
-  const [constituency, setConstituency] = useState<string>(voter?.constituency ?? "Kibra");
-  const [ward, setWard] = useState<string>(voter?.ward ?? "Kibra Central");
+  const [county, setCounty] = useState<string>(voter?.county ?? "");
+  const [constituency, setConstituency] = useState<string>(voter?.constituency ?? "");
+  const [ward, setWard] = useState<string>(voter?.ward ?? "");
+  const [selectedSeatId, setSelectedSeatId] = useState<string>("");
   const [search, setSearch] = useState<string>("");
   const [positions, setPositions] = useState<Position[]>([]);
   const [positionCandidates, setPositionCandidates] = useState<ElectionCandidate[]>([]);
-  const [myVote, setMyVote] = useState<string | null>(null);
+  const [myVotesByPosition, setMyVotesByPosition] = useState<Record<string, string>>({});
+  const [vyingPositions, setVyingPositions] = useState<Set<string>>(new Set());
   const [totals, setTotals] = useState<{
     totalVotesCast: number;
     totalVotesByPosition: Record<string, number>;
@@ -77,6 +80,9 @@ function ElectionsPage() {
     totalVotesCast: 0,
     totalVotesByPosition: {},
   });
+  const [registeredVoters, setRegisteredVoters] = useState(0);
+  const [livePositionCount, setLivePositionCount] = useState(0);
+  const [turnoutPct, setTurnoutPct] = useState(0);
 
   useEffect(() => {
     if (voter) {
@@ -88,57 +94,148 @@ function ElectionsPage() {
 
   useEffect(() => {
     fetchPositions()
-      .then(setPositions)
+      .then((rows) => {
+        setPositions(rows);
+        // Prefer first live county when browsing unsigned / without a saved location.
+        // Registered voters stay locked to their home locale (set above).
+        setCounty((prev) => {
+          if (prev) return prev;
+          return rows.find((p) => p.tier === "county" && p.county)?.county ?? "";
+        });
+      })
       .catch((e) => {
         console.warn("[elections] positions load failed:", e);
         setPositions([]);
       });
   }, []);
 
-  const scopeLabel =
-    activeTier === "county"
-      ? `${county} County`
-      : activeTier === "constituency"
-        ? `${constituency}, ${county}`
-        : `${ward} — ${constituency}, ${county}`;
+  useEffect(() => {
+    let cancelled = false;
+    getMyCandidatePositionIds()
+      .then((ids) => {
+        if (!cancelled) setVyingPositions(ids);
+      })
+      .catch(() => {
+        if (!cancelled) setVyingPositions(new Set());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [voter?.id]);
 
-  const scopeKey =
-    activeTier === "county"
-      ? county
-      : activeTier === "constituency"
-        ? `${county}|${constituency}`
-        : `${county}|${constituency}|${ward}`;
+  useEffect(() => {
+    let cancelled = false;
+    getPublicCounters()
+      .then((c) => {
+        if (cancelled) return;
+        setRegisteredVoters(c.registeredVoters);
+        setLivePositionCount(c.livePositions);
+      })
+      .catch((e) => console.warn("[elections] public counters failed:", e));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const activePosition = useMemo(() => {
+  useEffect(() => {
+    let cancelled = false;
+    turnoutByScope({})
+      .then((stats) => {
+        if (!cancelled) setTurnoutPct(stats.turnoutPct);
+      })
+      .catch((e) => console.warn("[elections] turnout failed:", e));
+    return () => {
+      cancelled = true;
+    };
+  }, [totals.totalVotesCast]);
+
+  const locationReady =
+    activeTier === "national" ||
+    (activeTier === "county" && !!county) ||
+    (activeTier === "constituency" && !!county && !!constituency) ||
+    (activeTier === "ward" && !!county && !!constituency && !!ward);
+
+  const scopeSeats = useMemo(() => {
     const tierPositions = positions.filter((p) => p.tier === activeTier);
-    return (
-      tierPositions.find((p) => {
+    if (activeTier === "national") {
+      return tierPositions
+        .map((p) => ({ id: p.id, title: p.title }))
+        .sort((a, b) => a.title.localeCompare(b.title));
+    }
+    if (!locationReady) return [];
+    return tierPositions
+      .filter((p) => {
         if (activeTier === "county") return p.county === county;
         if (activeTier === "constituency")
           return p.county === county && p.constituency === constituency;
         return p.county === county && p.constituency === constituency && p.ward === ward;
-      }) ?? tierPositions[0]
+      })
+      .map((p) => ({ id: p.id, title: p.title }))
+      .sort((a, b) => a.title.localeCompare(b.title));
+  }, [positions, activeTier, county, constituency, ward, locationReady]);
+
+  useEffect(() => {
+    if (!scopeSeats.length) {
+      setSelectedSeatId("");
+      return;
+    }
+    setSelectedSeatId((prev) =>
+      prev && scopeSeats.some((p) => p.id === prev) ? prev : scopeSeats[0].id,
     );
-  }, [positions, activeTier, county, constituency, ward]);
+  }, [scopeSeats]);
+
+  const scopeLabel =
+    activeTier === "national"
+      ? (scopeSeats.find((p) => p.id === selectedSeatId)?.title ?? "Select a national seat")
+      : activeTier === "county"
+        ? county
+          ? `${county} County`
+          : "Select a county"
+        : activeTier === "constituency"
+          ? constituency
+            ? `${constituency}, ${county}`
+            : "Select a constituency"
+          : ward
+            ? `${ward} — ${constituency}, ${county}`
+            : "Select a ward";
+
+  const scopeKey =
+    activeTier === "national"
+      ? selectedSeatId || "national"
+      : activeTier === "county"
+        ? `${county}|${selectedSeatId}`
+        : activeTier === "constituency"
+          ? `${county}|${constituency}|${selectedSeatId}`
+          : `${county}|${constituency}|${ward}|${selectedSeatId}`;
+
+  const scopeReady = locationReady && !!selectedSeatId;
+
+  const activePosition = useMemo(
+    () => positions.find((p) => p.id === selectedSeatId),
+    [positions, selectedSeatId],
+  );
 
   const positionTitle =
-    activeTier === "county"
-      ? `County Youth Governor — ${county}`
-      : activeTier === "constituency"
-        ? `Constituency Youth Rep — ${constituency}`
-        : `Ward Representative — ${ward}`;
+    activePosition?.title ??
+    (scopeReady ? `${TIER_META[activeTier].label} · ${scopeLabel}` : TIER_META[activeTier].label);
 
-  const rows = usePositionTally(activePosition?.id ?? null);
+  const ballotPositionIds = useMemo(
+    () => (selectedSeatId ? [selectedSeatId] : []),
+    [selectedSeatId],
+  );
+
+  const rows = usePositionsTally(ballotPositionIds);
 
   useEffect(() => {
     let cancelled = false;
-    if (!activePosition) {
+    if (!scopeReady || !selectedSeatId) {
       setPositionCandidates([]);
       return () => {
         cancelled = true;
       };
     }
-    listCandidatesByPosition(activePosition.id)
+
+    listCandidatesByPosition(selectedSeatId)
       .then((data) => {
         if (!cancelled) setPositionCandidates(data);
       })
@@ -149,7 +246,7 @@ function ElectionsPage() {
     return () => {
       cancelled = true;
     };
-  }, [activePosition?.id]);
+  }, [scopeReady, selectedSeatId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -161,28 +258,38 @@ function ElectionsPage() {
     return () => {
       cancelled = true;
     };
-  }, [rows, activePosition?.id]);
+  }, [rows, ballotPositionIds.join("|")]);
 
   useEffect(() => {
     let cancelled = false;
-    if (!voter || !activePosition) {
-      setMyVote(null);
+    if (!voter || !ballotPositionIds.length) {
+      setMyVotesByPosition({});
       return () => {
         cancelled = true;
       };
     }
-    getMyVoteAction(activePosition.id)
-      .then((candidateId) => {
-        if (!cancelled) setMyVote(candidateId);
+    Promise.all(
+      ballotPositionIds.map(async (positionId) => {
+        const candidateId = await getMyVoteAction(positionId);
+        return [positionId, candidateId] as const;
+      }),
+    )
+      .then((entries) => {
+        if (cancelled) return;
+        const next: Record<string, string> = {};
+        for (const [positionId, candidateId] of entries) {
+          if (candidateId) next[positionId] = candidateId;
+        }
+        setMyVotesByPosition(next);
       })
       .catch((e) => {
         console.warn("[elections] my vote load failed:", e);
-        if (!cancelled) setMyVote(null);
+        if (!cancelled) setMyVotesByPosition({});
       });
     return () => {
       cancelled = true;
     };
-  }, [voter?.id, activePosition?.id, getMyVoteAction]);
+  }, [voter?.id, ballotPositionIds.join("|"), getMyVoteAction]);
 
   const positionTotal = rows.reduce((s, r) => s + r.votes, 0);
   const leaderRow = rows[0];
@@ -201,50 +308,65 @@ function ElectionsPage() {
     : positionCandidates;
 
   const totalCast = totals.totalVotesCast;
-  const perPosition = totals.totalVotesByPosition;
-  const activePositions = Object.keys(perPosition).length;
-  const registered = voter ? 1 : 0;
-  const turnout = registered > 0 ? Math.min(100, (totalCast / registered) * 100) : 0;
+  const leaderShare =
+    leaderRow && positionTotal > 0 ? Math.round((leaderRow.votes / positionTotal) * 100) : 0;
 
   const [registerOpen, setRegisterOpen] = useState(false);
 
-  const { eligible: eligibleHere, reason: ineligibleReason } = checkEligibility(
-    voter,
-    activePosition,
-  );
+  const positionForCandidate = (candidateId: string) => {
+    const cand = positionCandidates.find((c) => c.id === candidateId);
+    if (!cand?.positionId) return activePosition;
+    return positions.find((p) => p.id === cand.positionId) ?? activePosition;
+  };
 
   const now = useNow();
-  const voterRegion = voter ? regionForCounty(voter.county) : undefined;
+  const { schedule, cyclePhase } = usePollSchedule();
+  const voterRegion = voter ? regionForCounty(voter.county, schedule) : undefined;
   const regionStatus = voterRegion ? pollStatus(voterRegion, now) : undefined;
-  const pollsOpen = regionStatus === "open";
+  const ballotTier = activePosition?.tier ?? activeTier;
+  const pollsOpen = isPollingOpen({
+    tier: ballotTier,
+    voterCounty: voter?.county,
+    schedule,
+    now,
+    cyclePhase,
+  });
 
   const handleQuickVote = async (candidateId: string) => {
     if (!voter) {
       setRegisterOpen(true);
       return;
     }
-    if (!activePosition) return;
+    const ballot = positionForCandidate(candidateId);
+    const cand = positionCandidates.find((c) => c.id === candidateId);
+    if (!ballot || !cand?.positionId) {
+      toast.error("This candidate has no live ballot yet");
+      return;
+    }
     if (!pollsOpen) {
       toast.error("Voting isn't open yet", {
-        description: voterRegion
-          ? `Your county's polls open on ${DATE_FMT.format(new Date(voterRegion.date))}, 08:00–18:00 EAT.`
-          : "This region's polling window is not open.",
+        description:
+          ballot.tier === "national"
+            ? "National polls are not open at this time."
+            : voterRegion
+              ? `Your county's polls open on ${DATE_FMT.format(new Date(voterRegion.date))}, 08:00–18:00 EAT.`
+              : "This region's polling window is not open.",
       });
       return;
     }
-    if (!eligibleHere) {
-      toast.error("You can't vote here", { description: ineligibleReason ?? "Not eligible." });
+    const { eligible, reason } = checkEligibility(voter, ballot, vyingPositions);
+    if (!eligible) {
+      toast.error("You can't vote here", { description: reason ?? "Not eligible." });
       return;
     }
-    const existing = myVote;
+    const existing = myVotesByPosition[cand.positionId];
     try {
-      const receipt = await castVoteAction(activePosition.id, candidateId);
-      setMyVote(candidateId);
+      const receipt = await castVoteAction(cand.positionId, candidateId);
+      setMyVotesByPosition((prev) => ({ ...prev, [cand.positionId]: candidateId }));
       const latestTotals = await fetchElectionTotals();
       setTotals(latestTotals);
-      const cand = positionCandidates.find((c) => c.id === candidateId);
       toast.success(existing ? "Vote updated" : "Vote recorded", {
-        description: `${cand?.name ?? "Candidate"} — ${positionTitle}. Receipt: ${receipt.receiptCode}.`,
+        description: `${cand.name} — ${ballot.title}. Receipt: ${receipt.receiptCode}.`,
       });
     } catch (e) {
       toast.error("Vote failed", {
@@ -253,9 +375,10 @@ function ElectionsPage() {
     }
   };
 
-  const goToBallot = () => {
-    if (!activePosition) return;
-    navigate({ to: "/elections/$positionId", params: { positionId: activePosition.id } });
+  const goToBallot = (positionId?: string) => {
+    const id = positionId ?? activePosition?.id;
+    if (!id) return;
+    navigate({ to: "/elections/$positionId", params: { positionId: id } });
   };
 
   return (
@@ -316,7 +439,11 @@ function ElectionsPage() {
           </div>
 
           <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard icon={Users} label="Registered voters" value={registered.toLocaleString()} />
+            <StatCard
+              icon={Users}
+              label="Registered voters"
+              value={registeredVoters.toLocaleString()}
+            />
             <StatCard
               icon={BarChart3}
               label="Votes counted"
@@ -326,9 +453,9 @@ function ElectionsPage() {
             <StatCard
               icon={Activity}
               label="Positions active"
-              value={activePositions.toLocaleString()}
+              value={livePositionCount.toLocaleString()}
             />
-            <StatCard icon={Radio} label="Turnout" value={`${turnout.toFixed(0)}%`} />
+            <StatCard icon={Radio} label="Turnout" value={`${turnoutPct.toFixed(0)}%`} />
           </div>
         </div>
       </section>
@@ -344,6 +471,10 @@ function ElectionsPage() {
         setConstituency={setConstituency}
         ward={ward}
         setWard={setWard}
+        scopeSeats={scopeSeats}
+        selectedSeatId={selectedSeatId}
+        setSelectedSeatId={setSelectedSeatId}
+        lockToHome={!!voter}
         homeLocation={
           voter
             ? { county: voter.county, constituency: voter.constituency, ward: voter.ward }
@@ -411,17 +542,30 @@ function ElectionsPage() {
 
             <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-muted">
               <div
-                className="h-full bg-gradient-to-r from-flag-red via-primary to-accent"
-                style={{
-                  width: `${Math.min(100, (positionTotal / Math.max(1, positionCandidates.length * 1_000_000)) * 100 + 30)}%`,
-                }}
+                className="h-full bg-gradient-to-r from-flag-red via-primary to-accent transition-[width]"
+                style={{ width: `${leaderShare}%` }}
+                title={
+                  leaderCand
+                    ? `${leaderCand.name} leads with ${leaderShare}%`
+                    : "No votes cast yet"
+                }
               />
             </div>
 
             <div className="mt-5 space-y-2">
-              {filteredCandidates.length === 0 ? (
+              {!scopeReady ? (
                 <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                  No candidates match "{search}".
+                  {!locationReady
+                    ? activeTier === "national"
+                      ? "Select a national seat above to see candidates vying for it."
+                      : "Select a location above to see candidates at this tier."
+                    : "No live ballot seat for this location yet. Pick another county or tier."}
+                </div>
+              ) : filteredCandidates.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                  {search.trim()
+                    ? `No candidates match "${search}".`
+                    : "No approved candidates are vying for this seat yet."}
                 </div>
               ) : (
                 filteredCandidates.map((c) => {
@@ -429,6 +573,13 @@ function ElectionsPage() {
                   const votes = row?.votes ?? 0;
                   const pct = positionTotal > 0 ? Math.round((votes / positionTotal) * 100) : 0;
                   const isLeader = leaderRow?.candidateId === c.id && positionTotal > 0;
+                  const ballot = positionForCandidate(c.id);
+                  const { eligible: canVoteHere } = checkEligibility(
+                    voter,
+                    ballot,
+                    vyingPositions,
+                  );
+                  const votedHere = myVotesByPosition[c.positionId] === c.id;
                   return (
                     <div
                       key={c.id}
@@ -442,7 +593,9 @@ function ElectionsPage() {
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-medium">{c.name}</div>
                         <div className="truncate text-xs text-muted-foreground">
-                          {c.county} · age {c.age} · "{c.slogan}"
+                          {activeTier === "national"
+                            ? `Nationwide · age ${c.age}${c.slogan ? ` · "${c.slogan}"` : ""}`
+                            : `${c.county} · age ${c.age} · "${c.slogan}"`}
                         </div>
                       </div>
                       <div className="hidden w-24 text-right tabular-nums text-sm sm:block">
@@ -456,7 +609,8 @@ function ElectionsPage() {
                           size="sm"
                           variant="outline"
                           className="hidden h-8 sm:inline-flex"
-                          onClick={goToBallot}
+                          onClick={() => goToBallot(c.positionId)}
+                          disabled={!c.positionId}
                         >
                           View
                         </Button>
@@ -464,18 +618,22 @@ function ElectionsPage() {
                           size="sm"
                           className="h-8 w-full bg-gradient-gold sm:w-auto"
                           onClick={() => handleQuickVote(c.id)}
-                          disabled={!!voter && (!eligibleHere || myVote === c.id || !pollsOpen)}
+                          disabled={!!voter && (!canVoteHere || votedHere || !pollsOpen)}
                         >
-                          {myVote === c.id ? (
+                          {votedHere ? (
                             <>
                               <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Voted
                             </>
                           ) : voter && !pollsOpen ? (
                             <>
                               <Clock className="mr-1 h-3.5 w-3.5" />{" "}
-                              {voterRegion ? DATE_FMT.format(new Date(voterRegion.date)) : "Closed"}
+                              {ballotTier === "national"
+                                ? "National closed"
+                                : voterRegion
+                                  ? DATE_FMT.format(new Date(voterRegion.date))
+                                  : "Closed"}
                             </>
-                          ) : voter && !eligibleHere ? (
+                          ) : voter && !canVoteHere ? (
                             <>
                               <Lock className="mr-1 h-3.5 w-3.5" /> Locked
                             </>
@@ -523,9 +681,9 @@ function ElectionsPage() {
             scopeLabel={scopeLabel}
             tier={activeTier}
             activePositionId={activePosition?.id ?? null}
-            county={activePosition?.county}
-            constituency={activePosition?.constituency}
-            ward={activePosition?.ward}
+            county={county || activePosition?.county}
+            constituency={constituency || activePosition?.constituency}
+            ward={ward || activePosition?.ward}
           />
           <AgeSplitPanel
             scopeKey={scopeKey}
@@ -732,11 +890,13 @@ function TurnoutByRegion({
   }, [supabaseAnalytics, activePositionId, county, constituency, ward]);
 
   const heading =
-    tier === "county"
-      ? "Turnout by constituency"
-      : tier === "constituency"
-        ? "Turnout by ward"
-        : "Turnout by polling stream";
+    tier === "national"
+      ? "National turnout"
+      : tier === "county"
+        ? "Turnout by constituency"
+        : tier === "constituency"
+          ? "Turnout by ward"
+          : "Turnout by polling stream";
 
   const rows = turnout
     ? [{ name: "Current scope", pct: Math.round(turnout.turnoutPct) }]

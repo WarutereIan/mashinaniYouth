@@ -1,5 +1,13 @@
 import { supabase } from "@/integrations/supabase/client";
-import type { RegionSchedule } from "@/lib/election-schedule";
+
+export interface RegionSchedule {
+  region: string;
+  counties: string[];
+  /** ISO date (YYYY-MM-DD) of polling day, EAT (UTC+3). */
+  date: string;
+  opensAt: string;
+  closesAt: string;
+}
 
 export interface DbPollWindow {
   id: number;
@@ -19,6 +27,16 @@ function toRegionSchedule(row: DbPollWindow): RegionSchedule {
     opensAt: row.opens_at,
     closesAt: row.closes_at,
   };
+}
+
+export async function getCyclePhase(cycleSlug = "mykdm-2026"): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("election_cycles")
+    .select("phase")
+    .eq("slug", cycleSlug)
+    .maybeSingle();
+  if (error) throw error;
+  return (data?.phase as string | undefined) ?? null;
 }
 
 export async function listPollWindows(cycleSlug = "mykdm-2026"): Promise<RegionSchedule[]> {
@@ -45,5 +63,7 @@ export async function regionForCountyFromDb(
 ): Promise<RegionSchedule | undefined> {
   const windows = await listPollWindows(cycleSlug);
   const norm = county.trim().toLowerCase();
-  return windows.find((r) => r.counties.some((c) => c.toLowerCase() === norm));
+  return windows.find((r) =>
+    r.counties.some((c: string) => c.toLowerCase() === norm),
+  );
 }

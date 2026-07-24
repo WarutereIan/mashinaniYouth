@@ -7,16 +7,16 @@ import { Button } from "@/components/ui/button";
 import { CandidateAvatar } from "@/components/candidate-avatar";
 import {
   DATE_FMT,
-  ELECTION_WINDOW_END,
-  ELECTION_WINDOW_START,
+  isPollingOpen,
   pollStatus,
   regionForCounty,
   useNow,
+  usePollSchedule,
 } from "@/lib/election-schedule";
 import { useVoter } from "@/lib/voters-source";
 import { getPositionById } from "@/lib/positions-source";
 import { listCandidatesByPosition } from "@/lib/api/election-candidates";
-import { checkEligibility, usePositionTally, useVoteActions } from "@/lib/votes-source";
+import { checkEligibility, isPositionInVoterLocale, usePositionTally, useVoteActions } from "@/lib/votes-source";
 import { getMyCandidatePositionIds } from "@/lib/candidates";
 import type { ElectionCandidate } from "@/lib/tier-meta";
 
@@ -49,6 +49,7 @@ function PositionPage() {
   const [candidates, setCandidates] = useState<ElectionCandidate[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [vyingPositions, setVyingPositions] = useState<Set<string>>(new Set());
+  const { schedule, cyclePhase, windowStart, windowEnd } = usePollSchedule();
 
   const totalVotes = tally.reduce((s, r) => s + r.votes, 0);
 
@@ -85,15 +86,33 @@ function PositionPage() {
   }, [position.id, voter, getMyVote]);
 
   const { eligible, reason } = checkEligibility(voter, position, vyingPositions);
+  const inLocale = !voter || isPositionInVoterLocale(voter, position);
 
   const now = useNow();
-  const voterRegion = voter ? regionForCounty(voter.county) : undefined;
+  const voterRegion = voter ? regionForCounty(voter.county, schedule) : undefined;
   const regionStatus = voterRegion ? pollStatus(voterRegion, now) : undefined;
-  const pollsOpen = regionStatus === "open";
+  const pollsOpen = isPollingOpen({
+    tier: position.tier,
+    voterCounty: voter?.county,
+    schedule,
+    now,
+    cyclePhase,
+  });
 
   const handleSubmit = async () => {
     if (!voter) {
       navigate({ to: "/register" });
+      return;
+    }
+    if (!pollsOpen) {
+      toast.error("Voting isn't open yet", {
+        description:
+          position.tier === "national"
+            ? "National polls are not open at this time."
+            : voterRegion
+              ? `Your county's polls open on ${DATE_FMT.format(new Date(voterRegion.date))}, 08:00–18:00 EAT.`
+              : "This region's polling window is not open.",
+      });
       return;
     }
     if (!eligible) {
@@ -165,6 +184,20 @@ function PositionPage() {
               <Link to="/register">Register to vote</Link>
             </Button>
           </div>
+        ) : !inLocale ? (
+          <div className="rounded-xl border border-border bg-card p-6">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Lock className="h-4 w-4 text-muted-foreground" />
+              Outside your registered area
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              You can only open ballots for your ward, constituency, county, and national seats.
+              Your registration: {voter.ward}, {voter.constituency}, {voter.county}.
+            </p>
+            <Button className="mt-4" variant="outline" asChild>
+              <Link to="/elections">Back to your ballots</Link>
+            </Button>
+          </div>
         ) : !eligible ? (
           <div className="rounded-xl border border-border bg-card p-6">
             <div className="flex items-center gap-2 text-sm font-medium">
@@ -177,12 +210,16 @@ function PositionPage() {
           <div className="rounded-xl border border-border bg-card p-6">
             <div className="flex items-center gap-2 text-sm font-medium">
               <Clock className="h-4 w-4 text-muted-foreground" />
-              Polls are not open for your county
+              {position.tier === "national"
+                ? "National polls are not open"
+                : "Polls are not open for your county"}
             </div>
             <p className="mt-2 text-sm text-muted-foreground">
-              {voterRegion
-                ? `Your region (${voterRegion.region}) is ${regionStatus ?? "scheduled"}.`
-                : "Check the election schedule."}
+              {position.tier === "national"
+                ? "National ballots open when any regional poll window is live (or the cycle is scheduled)."
+                : voterRegion
+                  ? `Your region (${voterRegion.region}) is ${regionStatus ?? "scheduled"}.`
+                  : "Check the election schedule."}
             </p>
           </div>
         ) : (
@@ -232,9 +269,10 @@ function PositionPage() {
 
             <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
               <p className="text-xs text-muted-foreground">
-                Poll day schedule uses IEBC county groupings ·{" "}
-                {DATE_FMT.format(new Date(ELECTION_WINDOW_START))} –{" "}
-                {DATE_FMT.format(new Date(ELECTION_WINDOW_END))} 2026
+                Poll day schedule uses IEBC county groupings
+                {windowStart && windowEnd
+                  ? ` · ${DATE_FMT.format(new Date(windowStart))} – ${DATE_FMT.format(new Date(windowEnd))}`
+                  : ""}
               </p>
               <Button
                 size="lg"

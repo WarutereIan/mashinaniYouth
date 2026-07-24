@@ -1,7 +1,7 @@
 import { MapPin, Building2, Vote } from "lucide-react";
 import { TIER_META, type Tier } from "@/lib/tier-meta";
 
-export const BALLOT_TIERS: Tier[] = ["county", "constituency", "ward"];
+export const BALLOT_TIERS: Tier[] = ["national", "county", "constituency", "ward"];
 
 const ICON: Record<Tier, typeof Vote> = {
   national: Vote,

@@ -3,12 +3,12 @@ import { CalendarDays, ChevronLeft, ChevronRight, Clock, MapPin } from "lucide-r
 import { Button } from "@/components/ui/button";
 import {
   DATE_FMT,
-  REGION_SCHEDULE,
   TIME_FMT,
   diffParts,
   pollStatus,
   regionForCounty,
   useNow,
+  usePollSchedule,
   type RegionSchedule,
 } from "@/lib/election-schedule";
 
@@ -18,18 +18,49 @@ function pad(n: number) {
 
 export function ElectionSchedule({ voterCounty }: { voterCounty?: string | null }) {
   const now = useNow(1000);
+  const { schedule, ready, error } = usePollSchedule();
 
   const myRegion = useMemo(
-    () => (voterCounty ? regionForCounty(voterCounty) : undefined),
-    [voterCounty],
+    () => (voterCounty ? regionForCounty(voterCounty, schedule) : undefined),
+    [voterCounty, schedule],
   );
 
-  const focus: RegionSchedule = useMemo(() => {
+  const focus: RegionSchedule | undefined = useMemo(() => {
+    if (!schedule.length) return undefined;
     if (myRegion) return myRegion;
-    // Fallback: next upcoming, else last
-    const upcoming = REGION_SCHEDULE.find((r) => new Date(r.closesAt).getTime() > now);
-    return upcoming ?? REGION_SCHEDULE[0];
-  }, [myRegion, now]);
+    const upcoming = schedule.find((r) => new Date(r.closesAt).getTime() > now);
+    return upcoming ?? schedule[0];
+  }, [myRegion, now, schedule]);
+
+  if (!ready) {
+    return (
+      <section className="border-b border-border/60 bg-card">
+        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+          <div className="text-[10px] font-semibold uppercase tracking-widest text-flag-red">
+            Regional polling schedule
+          </div>
+          <div className="mt-2 text-sm text-muted-foreground">Loading live schedule…</div>
+        </div>
+      </section>
+    );
+  }
+
+  if (!focus || schedule.length === 0) {
+    return (
+      <section className="border-b border-border/60 bg-card">
+        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+          <div className="text-[10px] font-semibold uppercase tracking-widest text-flag-red">
+            Regional polling schedule
+          </div>
+          <div className="mt-2 text-sm text-muted-foreground">
+            {error
+              ? "Could not load the polling schedule from the server."
+              : "No poll windows have been published for this election yet."}
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   const status = pollStatus(focus, now);
   const openMs = new Date(focus.opensAt).getTime();
@@ -96,7 +127,7 @@ export function ElectionSchedule({ voterCounty }: { voterCounty?: string | null 
           )}
         </div>
 
-        <RegionCarousel now={now} myRegion={myRegion} focus={focus} />
+        <RegionCarousel now={now} schedule={schedule} myRegion={myRegion} focus={focus} />
       </div>
     </section>
   );
@@ -104,10 +135,12 @@ export function ElectionSchedule({ voterCounty }: { voterCounty?: string | null 
 
 function RegionCarousel({
   now,
+  schedule,
   myRegion,
   focus,
 }: {
   now: number;
+  schedule: RegionSchedule[];
   myRegion?: RegionSchedule;
   focus: RegionSchedule;
 }) {
@@ -150,13 +183,13 @@ function RegionCarousel({
         ref={scrollerRef}
         className="flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth pb-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
       >
-        {REGION_SCHEDULE.map((r) => {
+        {schedule.map((r) => {
           const s = pollStatus(r, now);
           const isMine = myRegion?.region === r.region;
           const isFocus = focus.region === r.region;
           return (
             <div
-              key={r.region}
+              key={`${r.region}-${r.date}`}
               className={`w-[260px] shrink-0 snap-start rounded-xl border px-3 py-2.5 text-xs transition sm:w-[280px] ${
                 isFocus
                   ? "border-primary/60 bg-primary/10"
@@ -180,7 +213,8 @@ function RegionCarousel({
                 </span>
               </div>
               <div className="mt-1 text-muted-foreground">
-                {DATE_FMT.format(new Date(r.opensAt))} · {pad(8)}:00–{pad(18)}:00 EAT
+                {DATE_FMT.format(new Date(r.opensAt))} · {TIME_FMT.format(new Date(r.opensAt))}–
+                {TIME_FMT.format(new Date(r.closesAt))} EAT
               </div>
               <div className="mt-1 line-clamp-2 text-[11px] text-muted-foreground/80">
                 {r.counties.join(", ")}
