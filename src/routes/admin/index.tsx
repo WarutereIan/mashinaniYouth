@@ -66,7 +66,12 @@ function AdminDashboardPage() {
           <QuickLink
             to="/admin/candidates"
             title="Candidate approvals"
-            body="Review and approve or reject pending candidate submissions."
+            body="Review, approve, reject, or permanently delete candidate submissions."
+          />
+          <QuickLink
+            to="/admin/voters"
+            title="Voters & accounts"
+            body="Browse registered voters. Superadmins can remove roll entries or delete accounts."
           />
           <QuickLink
             to="/admin/positions"
@@ -92,7 +97,7 @@ function AdminDashboardPage() {
             <QuickLink
               to="/admin/users"
               title="Admin users"
-              body="Grant or revoke superadmin, reviewer, and viewer roles."
+              body="Grant or revoke roles, or delete admin auth accounts."
             />
           )}
         </div>
@@ -132,6 +137,7 @@ function QuickLink({
 }: {
   to:
     | "/admin/candidates"
+    | "/admin/voters"
     | "/admin/positions"
     | "/admin/schedule"
     | "/admin/support"

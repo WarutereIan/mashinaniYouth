@@ -4,6 +4,7 @@ import { ArrowLeft, Loader2, Trash2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { SiteFooter, SiteHeader } from "@/components/site-chrome";
 import {
+  adminDeleteUserFn,
   adminGrantRoleFn,
   adminListUsers,
   adminLookupUserByEmailFn,
@@ -147,6 +148,34 @@ function AdminUsersPage() {
     }
   };
 
+  const deleteAccount = async (user: AdminListedUser) => {
+    if (user.user_id === admin.userId) {
+      toast.error("You cannot delete your own account");
+      return;
+    }
+    if (user.role === "superadmin" && superadminCount <= 1) {
+      toast.error("Cannot delete the last superadmin");
+      return;
+    }
+    if (
+      !window.confirm(
+        `Permanently delete the account for ${user.email}?\n\nThis removes admin access, voter/candidate data, and the auth user.`,
+      )
+    ) {
+      return;
+    }
+    setBusyUserId(user.user_id);
+    try {
+      await adminDeleteUserFn({ data: { userId: user.user_id } });
+      setUsers((rows) => rows.filter((r) => r.user_id !== user.user_id));
+      toast.success(`Deleted account ${user.email}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to delete account");
+    } finally {
+      setBusyUserId(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
@@ -242,24 +271,36 @@ function AdminUsersPage() {
                     <TableCell className="font-medium">{user.email}</TableCell>
                     <TableCell className="uppercase">{user.role}</TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-flag-red/40 text-flag-red hover:bg-flag-red/10"
-                        onClick={() => void revoke(user)}
-                        disabled={
-                          busyUserId === user.user_id ||
-                          user.user_id === admin.userId ||
-                          (user.role === "superadmin" && superadminCount <= 1)
-                        }
-                      >
-                        {busyUserId === user.user_id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Trash2 className="mr-1 h-3.5 w-3.5" />
-                        )}
-                        Remove
-                      </Button>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void revoke(user)}
+                          disabled={
+                            busyUserId === user.user_id ||
+                            user.user_id === admin.userId ||
+                            (user.role === "superadmin" && superadminCount <= 1)
+                          }
+                        >
+                          {busyUserId === user.user_id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : null}
+                          Revoke role
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-flag-red/40 text-flag-red hover:bg-flag-red/10"
+                          onClick={() => void deleteAccount(user)}
+                          disabled={
+                            busyUserId === user.user_id ||
+                            user.user_id === admin.userId ||
+                            (user.role === "superadmin" && superadminCount <= 1)
+                          }
+                        >
+                          <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete account
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

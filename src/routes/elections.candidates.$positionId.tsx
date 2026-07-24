@@ -122,12 +122,17 @@ function AllCandidatesPage() {
       toast.error("You can't vote here", { description: reason ?? "Not eligible." });
       return;
     }
-    const existing = myVote;
+    if (myVote) {
+      toast.error("Ballot already cast", {
+        description: "You cannot change your vote for this position.",
+      });
+      return;
+    }
     try {
       const receipt = await castVote(position.id, candidateId);
       setMyVote(candidateId);
       const cand = candidates.find((c) => c.id === candidateId);
-      toast.success(existing ? "Vote updated" : "Vote recorded", {
+      toast.success("Vote recorded", {
         description: `${cand?.name ?? "Candidate"} — ${position.title}. Receipt: ${receipt.receiptCode}.`,
       });
     } catch (e) {
@@ -202,6 +207,7 @@ function AllCandidatesPage() {
               const votes = row?.votes ?? 0;
               const pct = total > 0 ? Math.round((votes / total) * 100) : 0;
               const isMine = myVote === c.id;
+              const alreadyVotedSeat = Boolean(myVote);
               return (
                 <div
                   key={c.id}
@@ -248,11 +254,15 @@ function AllCandidatesPage() {
                       size="sm"
                       className="flex-1 bg-gradient-gold"
                       onClick={() => void handleVote(c.id)}
-                      disabled={!!voter && (!eligible || isMine || !pollsOpen)}
+                      disabled={!!voter && (!eligible || alreadyVotedSeat || !pollsOpen)}
                     >
                       {isMine ? (
                         <>
                           <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Voted
+                        </>
+                      ) : alreadyVotedSeat ? (
+                        <>
+                          <Lock className="mr-1 h-3.5 w-3.5" /> Ballot cast
                         </>
                       ) : voter && !pollsOpen ? (
                         <>

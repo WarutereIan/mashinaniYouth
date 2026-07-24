@@ -641,6 +641,81 @@ export const adminUnsealCycleFn = createServerFn({ method: "POST" })
     return result;
   });
 
+export interface AdminListedVoter {
+  id: string;
+  user_id: string;
+  full_name: string;
+  email: string | null;
+  phone: string;
+  county: string;
+  constituency: string;
+  ward: string;
+  national_id_last4: string;
+  registered_at: string;
+  vote_count: number;
+}
+
+export async function adminListVoters(): Promise<AdminListedVoter[]> {
+  const { data, error } = await (supabase as unknown as LooseClient).rpc("admin_list_voters");
+  if (error) throw error;
+  return ((data ?? []) as AdminListedVoter[]).map((row) => ({
+    ...row,
+    vote_count: Number(row.vote_count ?? 0),
+  }));
+}
+
+const deleteCandidateSchema = z.object({ candidateId: z.string().uuid() });
+
+export const adminDeleteCandidateFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: { candidateId: string }) => deleteCandidateSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await requireMfa(supabase, userId);
+    await requireAdminRole(supabase, userId);
+    const { data: result, error } = await (supabase as unknown as LooseClient).rpc(
+      "admin_delete_candidate",
+      { p_candidate_id: data.candidateId },
+    );
+    if (error) throw new Error(error.message);
+    return result as { id: string; deleted: boolean; votes_deleted: number };
+  });
+
+const deleteVoterSchema = z.object({ voterId: z.string().uuid() });
+
+export const adminDeleteVoterFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: { voterId: string }) => deleteVoterSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await requireMfa(supabase, userId);
+    await requireAdminRole(supabase, userId, "superadmin");
+    const { data: result, error } = await (supabase as unknown as LooseClient).rpc(
+      "admin_delete_voter",
+      { p_voter_id: data.voterId },
+    );
+    if (error) throw new Error(error.message);
+    return result as { id: string; user_id: string; deleted: boolean };
+  });
+
+const deleteUserSchema = z.object({ userId: z.string().uuid() });
+
+/** Deletes auth user + related voter/candidate/profile rows. Superadmin only. */
+export const adminDeleteUserFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: { userId: string }) => deleteUserSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await requireMfa(supabase, userId);
+    await requireAdminRole(supabase, userId, "superadmin");
+    const { data: result, error } = await (supabase as unknown as LooseClient).rpc(
+      "admin_delete_user",
+      { p_user_id: data.userId },
+    );
+    if (error) throw new Error(error.message);
+    return result as { user_id: string; email: string | null; deleted: boolean };
+  });
+
 export async function adminDashboardStats() {
   const [voters, candidates, votes, pledges] = await Promise.all([
     supabase.rpc("count_registered_voters"),

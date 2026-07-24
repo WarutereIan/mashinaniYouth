@@ -119,6 +119,12 @@ function PositionPage() {
       toast.error("You can't vote here", { description: reason ?? "Not eligible." });
       return;
     }
+    if (myVote) {
+      toast.error("Ballot already cast", {
+        description: "You cannot change your vote for this position.",
+      });
+      return;
+    }
     if (!selected) {
       toast.error("Choose a candidate first");
       return;
@@ -229,15 +235,21 @@ function PositionPage() {
                 const votes = tally.find((t) => t.candidateId === c.id)?.votes ?? 0;
                 const pct = totalVotes > 0 ? (votes / totalVotes) * 100 : 0;
                 const isSelected = selected === c.id;
+                const isMine = myVote === c.id;
                 return (
                   <button
                     key={c.id}
                     type="button"
-                    onClick={() => setSelected(c.id)}
+                    disabled={!!myVote}
+                    onClick={() => {
+                      if (!myVote) setSelected(c.id);
+                    }}
                     className={`w-full rounded-xl border p-4 text-left transition ${
-                      isSelected
+                      isMine || isSelected
                         ? "border-primary bg-primary/5 ring-1 ring-primary/30"
-                        : "border-border bg-card hover:border-primary/40"
+                        : myVote
+                          ? "cursor-not-allowed border-border bg-card opacity-60"
+                          : "border-border bg-card hover:border-primary/40"
                     }`}
                   >
                     <div className="flex items-start gap-4">
@@ -260,7 +272,9 @@ function PositionPage() {
                           />
                         </div>
                       </div>
-                      {isSelected && <CheckCircle2 className="h-5 w-5 shrink-0 text-primary" />}
+                      {(isMine || isSelected) && (
+                        <CheckCircle2 className="h-5 w-5 shrink-0 text-primary" />
+                      )}
                     </div>
                   </button>
                 );
@@ -269,20 +283,30 @@ function PositionPage() {
 
             <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
               <p className="text-xs text-muted-foreground">
-                Poll day schedule uses IEBC county groupings
-                {windowStart && windowEnd
-                  ? ` · ${DATE_FMT.format(new Date(windowStart))} – ${DATE_FMT.format(new Date(windowEnd))}`
-                  : ""}
+                {myVote
+                  ? "Your ballot for this seat is final and cannot be changed."
+                  : `Poll day schedule uses IEBC county groupings${
+                      windowStart && windowEnd
+                        ? ` · ${DATE_FMT.format(new Date(windowStart))} – ${DATE_FMT.format(new Date(windowEnd))}`
+                        : ""
+                    }`}
               </p>
-              <Button
-                size="lg"
-                className="bg-gradient-gold"
-                disabled={submitting || !selected}
-                onClick={() => void handleSubmit()}
-              >
-                <Vote className="mr-2 h-4 w-4" />
-                {myVote ? "Change my vote" : "Cast vote"}
-              </Button>
+              {myVote ? (
+                <Button size="lg" variant="outline" disabled>
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  Vote recorded
+                </Button>
+              ) : (
+                <Button
+                  size="lg"
+                  className="bg-gradient-gold"
+                  disabled={submitting || !selected}
+                  onClick={() => void handleSubmit()}
+                >
+                  <Vote className="mr-2 h-4 w-4" />
+                  Cast vote
+                </Button>
+              )}
             </div>
           </>
         )}

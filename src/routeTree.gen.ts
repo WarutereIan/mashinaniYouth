@@ -25,6 +25,7 @@ import { Route as VerifyCertificateNumberRouteImport } from './routes/verify.$ce
 import { Route as ReceiptReceiptCodeRouteImport } from './routes/receipt.$receiptCode'
 import { Route as ElectionsPositionIdRouteImport } from './routes/elections.$positionId'
 import { Route as CandidatesApplyRouteImport } from './routes/candidates.apply'
+import { Route as AdminVotersRouteImport } from './routes/admin/voters'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
 import { Route as AdminSupportRouteImport } from './routes/admin/support'
 import { Route as AdminScheduleRouteImport } from './routes/admin/schedule'
@@ -117,6 +118,11 @@ const CandidatesApplyRoute = CandidatesApplyRouteImport.update({
   path: '/apply',
   getParentRoute: () => CandidatesRoute,
 } as any)
+const AdminVotersRoute = AdminVotersRouteImport.update({
+  id: '/admin/voters',
+  path: '/admin/voters',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminUsersRoute = AdminUsersRouteImport.update({
   id: '/admin/users',
   path: '/admin/users',
@@ -194,6 +200,7 @@ export interface FileRoutesByFullPath {
   '/admin/schedule': typeof AdminScheduleRoute
   '/admin/support': typeof AdminSupportRoute
   '/admin/users': typeof AdminUsersRoute
+  '/admin/voters': typeof AdminVotersRoute
   '/candidates/apply': typeof CandidatesApplyRoute
   '/elections/$positionId': typeof ElectionsPositionIdRoute
   '/receipt/$receiptCode': typeof ReceiptReceiptCodeRoute
@@ -221,6 +228,7 @@ export interface FileRoutesByTo {
   '/admin/schedule': typeof AdminScheduleRoute
   '/admin/support': typeof AdminSupportRoute
   '/admin/users': typeof AdminUsersRoute
+  '/admin/voters': typeof AdminVotersRoute
   '/candidates/apply': typeof CandidatesApplyRoute
   '/elections/$positionId': typeof ElectionsPositionIdRoute
   '/receipt/$receiptCode': typeof ReceiptReceiptCodeRoute
@@ -251,6 +259,7 @@ export interface FileRoutesById {
   '/admin/schedule': typeof AdminScheduleRoute
   '/admin/support': typeof AdminSupportRoute
   '/admin/users': typeof AdminUsersRoute
+  '/admin/voters': typeof AdminVotersRoute
   '/candidates/apply': typeof CandidatesApplyRoute
   '/elections/$positionId': typeof ElectionsPositionIdRoute
   '/receipt/$receiptCode': typeof ReceiptReceiptCodeRoute
@@ -282,6 +291,7 @@ export interface FileRouteTypes {
     | '/admin/schedule'
     | '/admin/support'
     | '/admin/users'
+    | '/admin/voters'
     | '/candidates/apply'
     | '/elections/$positionId'
     | '/receipt/$receiptCode'
@@ -309,6 +319,7 @@ export interface FileRouteTypes {
     | '/admin/schedule'
     | '/admin/support'
     | '/admin/users'
+    | '/admin/voters'
     | '/candidates/apply'
     | '/elections/$positionId'
     | '/receipt/$receiptCode'
@@ -338,6 +349,7 @@ export interface FileRouteTypes {
     | '/admin/schedule'
     | '/admin/support'
     | '/admin/users'
+    | '/admin/voters'
     | '/candidates/apply'
     | '/elections/$positionId'
     | '/receipt/$receiptCode'
@@ -368,6 +380,7 @@ export interface RootRouteChildren {
   AdminScheduleRoute: typeof AdminScheduleRoute
   AdminSupportRoute: typeof AdminSupportRoute
   AdminUsersRoute: typeof AdminUsersRoute
+  AdminVotersRoute: typeof AdminVotersRoute
   ReceiptReceiptCodeRoute: typeof ReceiptReceiptCodeRoute
   VerifyCertificateNumberRoute: typeof VerifyCertificateNumberRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -486,6 +499,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/candidates/apply'
       preLoaderRoute: typeof CandidatesApplyRouteImport
       parentRoute: typeof CandidatesRoute
+    }
+    '/admin/voters': {
+      id: '/admin/voters'
+      path: '/admin/voters'
+      fullPath: '/admin/voters'
+      preLoaderRoute: typeof AdminVotersRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/admin/users': {
       id: '/admin/users'
@@ -619,6 +639,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminScheduleRoute: AdminScheduleRoute,
   AdminSupportRoute: AdminSupportRoute,
   AdminUsersRoute: AdminUsersRoute,
+  AdminVotersRoute: AdminVotersRoute,
   ReceiptReceiptCodeRoute: ReceiptReceiptCodeRoute,
   VerifyCertificateNumberRoute: VerifyCertificateNumberRoute,
   AdminIndexRoute: AdminIndexRoute,

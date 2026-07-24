@@ -1,9 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState, type ReactNode } from "react";
-import { ArrowLeft, CheckCircle2, Loader2, RotateCcw, Search, XCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Loader2, RotateCcw, Search, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { SiteFooter, SiteHeader } from "@/components/site-chrome";
-import { adminSetCandidateStatusFn, listAllCandidates } from "@/lib/api/admin";
+import { adminDeleteCandidateFn, adminSetCandidateStatusFn, listAllCandidates } from "@/lib/api/admin";
 import { adminRouteLoader } from "@/lib/admin-loader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -162,9 +162,30 @@ function AdminCandidatesPage() {
     }
   };
 
+  const deleteCandidate = async (candidate: CandidateRow) => {
+    if (
+      !window.confirm(
+        `Permanently delete candidate "${candidate.full_name}"?\n\nThis also removes any votes cast for them and cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setBusyId(candidate.id);
+    try {
+      await adminDeleteCandidateFn({ data: { candidateId: candidate.id } });
+      setCandidates((rows) => rows.filter((row) => row.id !== candidate.id));
+      setSelected((current) => (current?.id === candidate.id ? null : current));
+      toast.success(`Deleted ${candidate.full_name}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Delete failed");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const actionButtons = (candidate: CandidateRow, stopPropagation = false) => (
     <div
-      className="flex justify-end gap-2"
+      className="flex flex-wrap justify-end gap-2"
       onClick={stopPropagation ? (e) => e.stopPropagation() : undefined}
     >
       {candidate.status !== "approved" && (
@@ -201,6 +222,18 @@ function AdminCandidatesPage() {
           disabled={busyId === candidate.id || !canAct}
         >
           <RotateCcw className="mr-1 h-3.5 w-3.5" /> Pending
+        </Button>
+      )}
+      {canAct && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="border-flag-red/40 text-flag-red hover:bg-flag-red/10"
+          onClick={() => void deleteCandidate(candidate)}
+          disabled={busyId === candidate.id}
+          title="Delete candidate"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
         </Button>
       )}
     </div>

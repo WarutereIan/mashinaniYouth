@@ -359,13 +359,18 @@ function ElectionsPage() {
       toast.error("You can't vote here", { description: reason ?? "Not eligible." });
       return;
     }
-    const existing = myVotesByPosition[cand.positionId];
+    if (myVotesByPosition[cand.positionId]) {
+      toast.error("Ballot already cast", {
+        description: "You cannot change your vote for this position.",
+      });
+      return;
+    }
     try {
       const receipt = await castVoteAction(cand.positionId, candidateId);
       setMyVotesByPosition((prev) => ({ ...prev, [cand.positionId]: candidateId }));
       const latestTotals = await fetchElectionTotals();
       setTotals(latestTotals);
-      toast.success(existing ? "Vote updated" : "Vote recorded", {
+      toast.success("Vote recorded", {
         description: `${cand.name} — ${ballot.title}. Receipt: ${receipt.receiptCode}.`,
       });
     } catch (e) {
@@ -579,7 +584,8 @@ function ElectionsPage() {
                     ballot,
                     vyingPositions,
                   );
-                  const votedHere = myVotesByPosition[c.positionId] === c.id;
+                  const votedForThis = myVotesByPosition[c.positionId] === c.id;
+                  const alreadyVotedSeat = Boolean(myVotesByPosition[c.positionId]);
                   return (
                     <div
                       key={c.id}
@@ -618,11 +624,15 @@ function ElectionsPage() {
                           size="sm"
                           className="h-8 w-full bg-gradient-gold sm:w-auto"
                           onClick={() => handleQuickVote(c.id)}
-                          disabled={!!voter && (!canVoteHere || votedHere || !pollsOpen)}
+                          disabled={!!voter && (!canVoteHere || alreadyVotedSeat || !pollsOpen)}
                         >
-                          {votedHere ? (
+                          {votedForThis ? (
                             <>
                               <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Voted
+                            </>
+                          ) : alreadyVotedSeat ? (
+                            <>
+                              <Lock className="mr-1 h-3.5 w-3.5" /> Ballot cast
                             </>
                           ) : voter && !pollsOpen ? (
                             <>
