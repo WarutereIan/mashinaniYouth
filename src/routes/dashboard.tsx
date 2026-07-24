@@ -15,18 +15,12 @@ import { SiteHeader, SiteFooter } from "@/components/site-chrome";
 import { CandidateAvatar } from "@/components/candidate-avatar";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { isSupabaseVotersEnabled, isSupabaseVotingEnabled } from "@/lib/feature-flags";
 import { TIER_META, type Position, type Tier } from "@/lib/tier-meta";
-import { CANDIDATES, POSITIONS } from "@/lib/mym-data";
 import { fetchPositions } from "@/lib/positions-source";
 import { checkEligibility, fetchMyVotes, useVoteActions } from "@/lib/votes-source";
 import { listCandidatesByPosition } from "@/lib/api/election-candidates";
 import { getMyCandidatePositionIds } from "@/lib/candidates";
 import type { ElectionCandidate } from "@/lib/tier-meta";
-import {
-  getMyVote as getMyVoteLocal,
-  tallyPosition as tallyPositionLocal,
-} from "@/lib/voter-store";
 import { signOutVoter, useVoter, voterIdDisplay } from "@/lib/voters-source";
 import { getMyAdminRow, hasPendingVieApplication } from "@/lib/api/admin-check";
 import { toast } from "sonner";
@@ -49,22 +43,20 @@ export const Route = createFileRoute("/dashboard")({
 
 function DashboardPage() {
   const navigate = useNavigate();
-  const supabaseMode = isSupabaseVotersEnabled();
-  const supabaseVoting = isSupabaseVotingEnabled();
   const { voter, ready } = useVoter();
   const { tallyPosition } = useVoteActions();
-  const [positions, setPositions] = useState<Position[]>(POSITIONS);
+  const [positions, setPositions] = useState<Position[]>([]);
   const [myVotes, setMyVotes] = useState<Record<string, string>>({});
   const [tallies, setTallies] = useState<Record<string, { candidateId: string; votes: number }[]>>(
     {},
   );
   const [candidateCards, setCandidateCards] = useState<Record<string, ElectionCandidate>>({});
   const [vyingPositions, setVyingPositions] = useState<Set<string>>(new Set());
-  const [adminChecked, setAdminChecked] = useState(!isSupabaseVotersEnabled());
+  const [adminChecked, setAdminChecked] = useState(false);
   const [pendingVieApplication, setPendingVieApplication] = useState(false);
 
   useEffect(() => {
-    if (!supabaseMode || !ready) return;
+    if (!ready) return;
     let cancelled = false;
     supabase.auth.getSession().then(async ({ data }) => {
       if (cancelled) return;
@@ -86,7 +78,7 @@ function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [supabaseMode, ready, navigate]);
+  }, [ready, navigate]);
 
   // A "vie"-only signup with no application yet has nothing to see here —
   // send them back to finish applying. "Both" signups (registered voters)
@@ -100,11 +92,13 @@ function DashboardPage() {
   useEffect(() => {
     fetchPositions()
       .then(setPositions)
-      .catch(() => setPositions(POSITIONS));
+      .catch((e) => {
+        console.warn("[dashboard] positions load failed:", e);
+        setPositions([]);
+      });
   }, []);
 
   useEffect(() => {
-    if (!supabaseVoting) return;
     let cancelled = false;
     getMyCandidatePositionIds()
       .then((set) => {
@@ -116,28 +110,19 @@ function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [supabaseVoting]);
+  }, []);
 
   useEffect(() => {
     if (!voter) {
       setMyVotes({});
       return;
     }
-    if (supabaseVoting) {
-      void fetchMyVotes(voter).then((rows) => {
-        const map: Record<string, string> = {};
-        for (const row of rows) map[row.positionId] = row.candidateId;
-        setMyVotes(map);
-      });
-      return;
-    }
-    const map: Record<string, string> = {};
-    for (const p of positions) {
-      const id = getMyVoteLocal(p.id, voter.id);
-      if (id) map[p.id] = id;
-    }
-    setMyVotes(map);
-  }, [voter, positions, supabaseVoting]);
+    void fetchMyVotes(voter).then((rows) => {
+      const map: Record<string, string> = {};
+      for (const row of rows) map[row.positionId] = row.candidateId;
+      setMyVotes(map);
+    });
+  }, [voter]);
 
   useEffect(() => {
     if (!voter || Object.keys(myVotes).length === 0) {
@@ -148,25 +133,19 @@ function DashboardPage() {
       const next: Record<string, { candidateId: string; votes: number }[]> = {};
       const cards: Record<string, ElectionCandidate> = {};
       for (const positionId of Object.keys(myVotes)) {
-        if (supabaseVoting) {
-          const [tally, candidates] = await Promise.all([
-            tallyPosition(positionId),
-            listCandidatesByPosition(positionId),
-          ]);
-          next[positionId] = tally;
-          const picked = candidates.find((c) => c.id === myVotes[positionId]);
-          if (picked) cards[positionId] = picked;
-        } else {
-          next[positionId] = tallyPositionLocal(positionId);
-          const picked = CANDIDATES.find((c) => c.id === myVotes[positionId]);
-          if (picked) cards[positionId] = picked;
-        }
+        const [tally, candidates] = await Promise.all([
+          tallyPosition(positionId),
+          listCandidatesByPosition(positionId),
+        ]);
+        next[positionId] = tally;
+        const picked = candidates.find((c) => c.id === myVotes[positionId]);
+        if (picked) cards[positionId] = picked;
       }
       setTallies(next);
       setCandidateCards(cards);
     };
     void load();
-  }, [myVotes, supabaseVoting, tallyPosition, voter]);
+  }, [myVotes, tallyPosition, voter]);
 
   if (!ready || !adminChecked) {
     return (
@@ -195,8 +174,8 @@ function DashboardPage() {
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Button size="lg" className="bg-gradient-gold" asChild>
-              <Link to={supabaseMode ? "/auth" : "/register"}>
-                {supabaseMode ? "Sign in to register" : "Register to vote"}
+              <Link to="/auth" search={{ redirect: "/dashboard" }}>
+                Sign in to register
               </Link>
             </Button>
             <Button size="lg" variant="outline" asChild>
@@ -330,8 +309,7 @@ function DashboardPage() {
 
             {votedPositions.map((position) => {
               const myCandidateId = myVotes[position.id];
-              const cand =
-                candidateCards[position.id] ?? CANDIDATES.find((c) => c.id === myCandidateId);
+              const cand = candidateCards[position.id];
               const tally = tallies[position.id] ?? [];
               const total = tally.reduce((s, r) => s + r.votes, 0);
               const rank = cand ? tally.findIndex((r) => r.candidateId === cand.id) + 1 : 0;

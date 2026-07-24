@@ -30,14 +30,9 @@ import {
 } from "@/components/ui/dialog";
 import { LocationTierBar } from "@/components/location-tier-bar";
 import { ElectionSchedule } from "@/components/election-schedule";
-import { CANDIDATES, POSITIONS } from "@/lib/mym-data";
 import { TIER_META, type ElectionCandidate, type Position, type Tier } from "@/lib/tier-meta";
 import { fetchPositions } from "@/lib/positions-source";
-import {
-  isSupabaseAnalyticsEnabled,
-  isSupabaseBackendEnabled,
-  isSupabaseReferenceDataEnabled,
-} from "@/lib/feature-flags";
+import { isSupabaseAnalyticsEnabled } from "@/lib/feature-flags";
 import { DATE_FMT, pollStatus, regionForCounty, useNow } from "@/lib/election-schedule";
 import {
   checkEligibility,
@@ -63,28 +58,16 @@ export const Route = createFileRoute("/elections/")({
   component: ElectionsPage,
 });
 
-// Fallback position per tier — used to render candidate rows when the
-// selected location has no dedicated position in mym-data.
-const TIER_FALLBACK_POSITION: Record<Tier, string> = {
-  national: "national-chair",
-  county: "governor-nairobi",
-  constituency: "constituency-kibra",
-  ward: "ward-kibra",
-};
-
 function ElectionsPage() {
   const navigate = useNavigate();
   const { voter } = useVoter();
-  const supabaseReferenceData = isSupabaseReferenceDataEnabled();
-  const supabaseBackend = isSupabaseBackendEnabled();
-  const supabaseReferenceEnabled = supabaseReferenceData || supabaseBackend;
   const { castVote: castVoteAction, getMyVote: getMyVoteAction } = useVoteActions();
   const [activeTier, setActiveTier] = useState<Tier>("county");
   const [county, setCounty] = useState<string>(voter?.county ?? "Nairobi");
   const [constituency, setConstituency] = useState<string>(voter?.constituency ?? "Kibra");
   const [ward, setWard] = useState<string>(voter?.ward ?? "Kibra Central");
   const [search, setSearch] = useState<string>("");
-  const [positions, setPositions] = useState<Position[]>(supabaseReferenceEnabled ? [] : POSITIONS);
+  const [positions, setPositions] = useState<Position[]>([]);
   const [positionCandidates, setPositionCandidates] = useState<ElectionCandidate[]>([]);
   const [myVote, setMyVote] = useState<string | null>(null);
   const [totals, setTotals] = useState<{
@@ -104,11 +87,13 @@ function ElectionsPage() {
   }, [voter]);
 
   useEffect(() => {
-    if (!supabaseReferenceEnabled) return;
     fetchPositions()
       .then(setPositions)
-      .catch((e) => console.warn("[elections] positions load failed:", e));
-  }, [supabaseReferenceEnabled]);
+      .catch((e) => {
+        console.warn("[elections] positions load failed:", e);
+        setPositions([]);
+      });
+  }, []);
 
   const scopeLabel =
     activeTier === "county"
@@ -126,16 +111,13 @@ function ElectionsPage() {
 
   const activePosition = useMemo(() => {
     const tierPositions = positions.filter((p) => p.tier === activeTier);
-    const matched = tierPositions.find((p) => {
-      if (activeTier === "county") return p.county === county;
-      if (activeTier === "constituency")
-        return p.county === county && p.constituency === constituency;
-      return p.county === county && p.constituency === constituency && p.ward === ward;
-    });
     return (
-      matched ??
-      tierPositions.find((p) => p.id === TIER_FALLBACK_POSITION[activeTier]) ??
-      tierPositions[0]
+      tierPositions.find((p) => {
+        if (activeTier === "county") return p.county === county;
+        if (activeTier === "constituency")
+          return p.county === county && p.constituency === constituency;
+        return p.county === county && p.constituency === constituency && p.ward === ward;
+      }) ?? tierPositions[0]
     );
   }, [positions, activeTier, county, constituency, ward]);
 
@@ -156,12 +138,6 @@ function ElectionsPage() {
         cancelled = true;
       };
     }
-    if (!supabaseReferenceEnabled) {
-      setPositionCandidates(CANDIDATES.filter((c) => c.positionId === activePosition.id));
-      return () => {
-        cancelled = true;
-      };
-    }
     listCandidatesByPosition(activePosition.id)
       .then((data) => {
         if (!cancelled) setPositionCandidates(data);
@@ -173,7 +149,7 @@ function ElectionsPage() {
     return () => {
       cancelled = true;
     };
-  }, [activePosition?.id, supabaseReferenceEnabled]);
+  }, [activePosition?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -625,18 +601,7 @@ function StatCard({
 
 /* ---------- Scoped analytics widgets ---------- */
 
-// Deterministic 0..1 hash so numbers stay stable per scope but change per region.
-function hashUnit(seed: string, salt = 0): number {
-  let h = 2166136261 ^ salt;
-  for (let i = 0; i < seed.length; i++) {
-    h ^= seed.charCodeAt(i);
-    h = (h * 16777619) >>> 0;
-  }
-  return (h >>> 0) / 0xffffffff;
-}
-
 function VoteByGenderChart({
-  scopeKey,
   scopeLabel,
   activePositionId,
 }: {
@@ -673,10 +638,9 @@ function VoteByGenderChart({
     };
   }, [supabaseAnalytics, activePositionId]);
 
-  // Female share swings between 42% and 58% based on scope
-  const fallbackFemale = Math.round(42 + hashUnit(scopeKey, 1) * 16);
-  const female = split?.female ?? fallbackFemale;
-  const male = 100 - female;
+  // Prefer live split from Supabase; show empty bars until data arrives.
+  const female = split?.female ?? 0;
+  const male = split?.male ?? 0;
   return (
     <div className="rounded-2xl border border-border bg-card p-5">
       <div className="flex items-center justify-between">
@@ -773,21 +737,11 @@ function TurnoutByRegion({
       : tier === "constituency"
         ? "Turnout by ward"
         : "Turnout by polling stream";
-  const labels =
-    tier === "county"
-      ? ["Central", "North", "South", "East", "West", "Coastal"]
-      : tier === "constituency"
-        ? ["Ward A", "Ward B", "Ward C", "Ward D", "Ward E"]
-        : ["Stream 1", "Stream 2", "Stream 3", "Stream 4"];
 
-  const fallbackRows = labels.map((name, i) => ({
-    name,
-    pct: Math.round(28 + hashUnit(scopeKey, i + 2) * 55),
-  }));
   const rows = turnout
     ? [{ name: "Current scope", pct: Math.round(turnout.turnoutPct) }]
-    : fallbackRows;
-  const peak = Math.max(...rows.map((r) => r.pct));
+    : [];
+  const peak = rows.length ? Math.max(...rows.map((r) => r.pct)) : 0;
 
   return (
     <div className="rounded-2xl border border-border bg-card p-5">
@@ -828,10 +782,7 @@ function TurnoutByRegion({
   );
 }
 
-const AGE_BANDS = ["18–20", "21–24", "25–29", "30–35"] as const;
-
 function AgeSplitPanel({
-  scopeKey,
   scopeLabel,
   activePositionId,
 }: {
@@ -864,14 +815,7 @@ function AgeSplitPanel({
     };
   }, [supabaseAnalytics, activePositionId]);
 
-  // Generate a distribution that sums to 100 per scope
-  const fallbackWeights = AGE_BANDS.map((_, i) => 15 + hashUnit(scopeKey, i + 20) * 25);
-  const fallbackSum = fallbackWeights.reduce((a, b) => a + b, 0);
-  const fallbackRows = AGE_BANDS.map((band, i) => ({
-    band,
-    pct: Math.round((fallbackWeights[i] / fallbackSum) * 100),
-  }));
-  const rows = apiRows ?? fallbackRows;
+  const rows = apiRows ?? [];
 
   return (
     <div className="space-y-4">

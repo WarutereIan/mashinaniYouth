@@ -308,10 +308,11 @@ function AuthPage() {
     } else {
       toast.success(
         wantsVoter
-          ? "You're on the voter roll — your ballot is open."
+          ? "You're on the voter roll — open your dashboard to cast a vote."
           : "Account created — you're signed in.",
       );
-      navigate({ to: redirect ?? "/elections" });
+      // Voters (and "both") land on their dashboard; elections is reached from there.
+      navigate({ to: redirect ?? "/dashboard" });
     }
   };
 

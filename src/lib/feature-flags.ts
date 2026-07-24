@@ -1,31 +1,33 @@
-/** Feature flags for incremental Supabase rollout. */
+/**
+ * Live-data mode: all election / voter / voting / analytics / support
+ * slices talk to Supabase. Local mock fallbacks (mym-data, voter-store)
+ * are no longer used for product flows.
+ *
+ * Env vars `VITE_USE_SUPABASE_*` are retained for documentation only —
+ * these helpers always return true.
+ */
+
 export function isSupabaseReferenceDataEnabled(): boolean {
-  const v = import.meta.env.VITE_USE_SUPABASE_REFERENCE_DATA;
-  return v === "true" || v === "1" || isSupabaseBackendEnabled();
+  return true;
 }
 
 export function isSupabaseVotersEnabled(): boolean {
-  const v = import.meta.env.VITE_USE_SUPABASE_VOTERS;
-  return v === "true" || v === "1" || isSupabaseBackendEnabled();
+  return true;
 }
 
 export function isSupabaseVotingEnabled(): boolean {
-  const v = import.meta.env.VITE_USE_SUPABASE_VOTING;
-  return v === "true" || v === "1" || isSupabaseBackendEnabled();
+  return true;
 }
 
 export function isSupabaseAnalyticsEnabled(): boolean {
-  const v = import.meta.env.VITE_USE_SUPABASE_ANALYTICS;
-  return v === "true" || v === "1" || isSupabaseBackendEnabled();
+  return true;
 }
 
 export function isSupabaseSupportEnabled(): boolean {
-  const v = import.meta.env.VITE_USE_SUPABASE_SUPPORT;
-  return v === "true" || v === "1" || isSupabaseBackendEnabled();
+  return true;
 }
 
-/** Master switch — enables all Supabase-backed slices (2–8). */
+/** Master switch — always on (live Supabase backend). */
 export function isSupabaseBackendEnabled(): boolean {
-  const v = import.meta.env.VITE_USE_SUPABASE_BACKEND;
-  return v === "true" || v === "1";
+  return true;
 }

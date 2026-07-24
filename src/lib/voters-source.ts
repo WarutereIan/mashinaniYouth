@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { isSupabaseVotersEnabled } from "@/lib/feature-flags";
 import {
   getMyVoter,
   registerVoter as registerVoterApi,
@@ -8,62 +7,32 @@ import {
   type RegisterVoterInput,
   type Voter,
 } from "@/lib/api/voters";
-import {
-  getVoter as getLocalVoter,
-  registerVoter as registerLocalVoter,
-  signOutVoter as signOutLocalVoter,
-  type Voter as LocalVoter,
-} from "@/lib/voter-store";
 
 export type { RegisterVoterInput, Voter };
 
-/** Sync read — localStorage only. Supabase mode returns null (use useVoter). */
-export function getVoterSync(): LocalVoter | Voter | null {
-  if (isSupabaseVotersEnabled()) return null;
-  return getLocalVoter();
+/** Sync read — always null in live mode (use useVoter / fetchVoter). */
+export function getVoterSync(): Voter | null {
+  return null;
 }
 
-export async function fetchVoter(): Promise<Voter | LocalVoter | null> {
-  if (!isSupabaseVotersEnabled()) return getLocalVoter();
+export async function fetchVoter(): Promise<Voter | null> {
   return getMyVoter();
 }
 
-export async function registerVoter(
-  input: Omit<LocalVoter, "registeredAt"> | RegisterVoterInput,
-): Promise<Voter | LocalVoter> {
-  if (!isSupabaseVotersEnabled()) {
-    return registerLocalVoter(input as Omit<LocalVoter, "registeredAt">);
-  }
-  return registerVoterApi(input as RegisterVoterInput);
+export async function registerVoter(input: RegisterVoterInput): Promise<Voter> {
+  return registerVoterApi(input);
 }
 
 export async function signOutVoter(): Promise<void> {
-  if (!isSupabaseVotersEnabled()) {
-    signOutLocalVoter();
-    return;
-  }
   await signOutVoterApi();
 }
 
-/** Hook for routes that need the current voter (Supabase or localStorage). */
+/** Hook for routes that need the current voter from Supabase. */
 export function useVoter() {
-  const supabaseMode = isSupabaseVotersEnabled();
-  const [voter, setVoter] = useState<Voter | LocalVoter | null>(() =>
-    supabaseMode ? null : getLocalVoter(),
-  );
-  const [ready, setReady] = useState(!supabaseMode);
+  const [voter, setVoter] = useState<Voter | null>(null);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (!supabaseMode) {
-      const refresh = () => setVoter(getLocalVoter());
-      window.addEventListener("storage", refresh);
-      window.addEventListener("mym:voter-changed", refresh);
-      return () => {
-        window.removeEventListener("storage", refresh);
-        window.removeEventListener("mym:voter-changed", refresh);
-      };
-    }
-
     let cancelled = false;
 
     const refresh = async () => {
@@ -77,7 +46,7 @@ export function useVoter() {
       }
     };
 
-    refresh();
+    void refresh();
 
     const { data: authSub } = supabase.auth.onAuthStateChange(() => {
       void refresh();
@@ -93,15 +62,13 @@ export function useVoter() {
       authSub.subscription.unsubscribe();
       window.removeEventListener("mym:voter-changed", onChange);
     };
-  }, [supabaseMode]);
+  }, []);
 
-  return { voter, ready, supabaseMode };
+  return { voter, ready, supabaseMode: true as const };
 }
 
 /** Display last-4 for ID line in UI. */
-export function voterIdDisplay(voter: Voter | LocalVoter): string {
-  if ("nationalIdLast4" in voter && voter.nationalIdLast4) {
-    return voter.nationalIdLast4;
-  }
+export function voterIdDisplay(voter: Voter): string {
+  if (voter.nationalIdLast4) return voter.nationalIdLast4;
   return voter.id.slice(-4);
 }

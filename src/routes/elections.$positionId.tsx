@@ -17,9 +17,7 @@ import { useVoter } from "@/lib/voters-source";
 import { getPositionById } from "@/lib/positions-source";
 import { listCandidatesByPosition } from "@/lib/api/election-candidates";
 import { checkEligibility, usePositionTally, useVoteActions } from "@/lib/votes-source";
-import { isSupabaseReferenceDataEnabled, isSupabaseVotingEnabled } from "@/lib/feature-flags";
 import { getMyCandidatePositionIds } from "@/lib/candidates";
-import { CANDIDATES } from "@/lib/mym-data";
 import type { ElectionCandidate } from "@/lib/tier-meta";
 
 export const Route = createFileRoute("/elections/$positionId")({
@@ -46,8 +44,6 @@ function PositionPage() {
   const { voter } = useVoter();
   const { castVote, getMyVote } = useVoteActions();
   const tally = usePositionTally(position.id);
-  const supabaseRef = isSupabaseReferenceDataEnabled();
-  const supabaseVoting = isSupabaseVotingEnabled();
   const [selected, setSelected] = useState<string | null>(null);
   const [myVote, setMyVote] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<ElectionCandidate[]>([]);
@@ -57,17 +53,12 @@ function PositionPage() {
   const totalVotes = tally.reduce((s, r) => s + r.votes, 0);
 
   useEffect(() => {
-    if (!supabaseRef) {
-      setCandidates(CANDIDATES.filter((c) => c.positionId === position.id));
-      return;
-    }
     listCandidatesByPosition(position.id)
       .then(setCandidates)
       .catch(() => setCandidates([]));
-  }, [position.id, supabaseRef]);
+  }, [position.id]);
 
   useEffect(() => {
-    if (!supabaseVoting) return;
     let cancelled = false;
     getMyCandidatePositionIds()
       .then((set) => {
@@ -79,7 +70,7 @@ function PositionPage() {
     return () => {
       cancelled = true;
     };
-  }, [supabaseVoting]);
+  }, []);
 
   useEffect(() => {
     if (!voter) {

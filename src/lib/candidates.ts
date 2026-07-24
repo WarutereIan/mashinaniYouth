@@ -1,6 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { isSupabaseBackendEnabled } from "@/lib/feature-flags";
-import { submitCandidateFn, type SubmitCandidateInput } from "@/lib/api/submit-candidate.fn";
+import { submitCandidateFn } from "@/lib/api/submit-candidate.fn";
 
 export type CandidateTier = "national" | "county" | "constituency" | "ward";
 export type CandidateStatus = "pending" | "approved" | "rejected";
@@ -84,33 +83,30 @@ export async function getMyCandidatePositionIds(): Promise<Set<string>> {
 }
 
 export async function submitCandidate(input: NewCandidate): Promise<Candidate> {
-  if (isSupabaseBackendEnabled() && input.position_id) {
-    const row = await submitCandidateFn({
-      data: {
-        full_name: input.full_name,
-        national_id: input.national_id,
-        iebc_voter_number: input.iebc_voter_number,
-        phone: input.phone,
-        email: input.email ?? "",
-        date_of_birth: input.date_of_birth ?? "",
-        gender: input.gender ?? "",
-        tier: input.tier,
-        position_id: input.position_id,
-        position_title: input.position_title,
-        county: input.county,
-        constituency: input.constituency ?? "",
-        ward: input.ward ?? "",
-        party: input.party ?? "",
-        slogan: input.slogan ?? "",
-        bio: input.bio ?? "",
-      },
-    });
-    return row as Candidate;
+  if (!input.position_id) {
+    throw new Error("Select a ballot position before submitting");
   }
-
-  const { data, error } = await supabase.from("candidates").insert(input).select("*").single();
-  if (error) throw error;
-  return data as Candidate;
+  const row = await submitCandidateFn({
+    data: {
+      full_name: input.full_name,
+      national_id: input.national_id,
+      iebc_voter_number: input.iebc_voter_number,
+      phone: input.phone,
+      email: input.email ?? "",
+      date_of_birth: input.date_of_birth ?? "",
+      gender: input.gender ?? "",
+      tier: input.tier,
+      position_id: input.position_id,
+      position_title: input.position_title,
+      county: input.county,
+      constituency: input.constituency ?? "",
+      ward: input.ward ?? "",
+      party: input.party ?? "",
+      slogan: input.slogan ?? "",
+      bio: input.bio ?? "",
+    },
+  });
+  return row as Candidate;
 }
 
 export function candidateInitials(name: string): string {

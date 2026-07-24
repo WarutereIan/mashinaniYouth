@@ -6,13 +6,11 @@ import { SiteHeader, SiteFooter } from "@/components/site-chrome";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CandidateAvatar } from "@/components/candidate-avatar";
-import { CANDIDATES } from "@/lib/mym-data";
 import { DATE_FMT, pollStatus, regionForCounty, useNow } from "@/lib/election-schedule";
 import { useVoter } from "@/lib/voters-source";
 import { getPositionById } from "@/lib/positions-source";
 import { listCandidatesByPosition } from "@/lib/api/election-candidates";
 import { checkEligibility, usePositionTally, useVoteActions } from "@/lib/votes-source";
-import { isSupabaseReferenceDataEnabled, isSupabaseVotingEnabled } from "@/lib/feature-flags";
 import { getMyCandidatePositionIds } from "@/lib/candidates";
 import type { ElectionCandidate } from "@/lib/tier-meta";
 
@@ -40,25 +38,18 @@ function AllCandidatesPage() {
   const { voter } = useVoter();
   const { castVote, getMyVote } = useVoteActions();
   const tally = usePositionTally(position.id);
-  const supabaseRef = isSupabaseReferenceDataEnabled();
-  const supabaseVoting = isSupabaseVotingEnabled();
   const [candidates, setCandidates] = useState<ElectionCandidate[]>([]);
   const [myVote, setMyVote] = useState<string | null>(null);
   const [vyingPositions, setVyingPositions] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    if (!supabaseRef) {
-      setCandidates(CANDIDATES.filter((c) => c.positionId === position.id));
-      return;
-    }
     listCandidatesByPosition(position.id)
       .then(setCandidates)
       .catch(() => setCandidates([]));
-  }, [position.id, supabaseRef]);
+  }, [position.id]);
 
   useEffect(() => {
-    if (!supabaseVoting) return;
     let cancelled = false;
     getMyCandidatePositionIds()
       .then((set) => {
@@ -70,7 +61,7 @@ function AllCandidatesPage() {
     return () => {
       cancelled = true;
     };
-  }, [supabaseVoting]);
+  }, []);
 
   useEffect(() => {
     if (!voter) {

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { isSupabaseVotingEnabled } from "@/lib/feature-flags";
 import type { Voter } from "@/lib/api/voters";
 import { getMyVoter } from "@/lib/api/voters";
 import {
@@ -14,63 +13,30 @@ import {
   type CastVoteResult,
   type TallyRow,
 } from "@/lib/api/votes";
-import {
-  castVote as castVoteLocal,
-  getMyVote as getMyVoteLocal,
-  tallyPosition as tallyPositionLocal,
-  totalVotesByPosition as totalVotesByPositionLocal,
-  totalVotesCast as totalVotesCastLocal,
-  isEligible,
-  eligibilityReason,
-} from "@/lib/voter-store";
 import { useVoter } from "@/lib/voters-source";
 import type { Position } from "@/lib/tier-meta";
 
 export type { CastVoteInput, CastVoteResult, TallyRow };
 
 export function useVoteActions() {
-  const supabase = isSupabaseVotingEnabled();
   const { voter } = useVoter();
 
-  const castVote = useCallback(
-    async (positionId: string, candidateId: string) => {
-      if (supabase) {
-        return castVoteApi({ positionId, candidateId });
-      }
-      if (!voter) throw new Error("Register to vote first");
-      castVoteLocal(positionId, voter.id, candidateId);
-      return {
-        receiptCode: "LOCAL-MOCK",
-        castAt: new Date().toISOString(),
-        positionId,
-        candidateId,
-      };
-    },
-    [supabase, voter],
-  );
+  const castVote = useCallback(async (positionId: string, candidateId: string) => {
+    return castVoteApi({ positionId, candidateId });
+  }, []);
 
-  const getMyVote = useCallback(
-    async (positionId: string) => {
-      if (supabase) return getMyVoteApi(positionId);
-      if (!voter) return null;
-      return getMyVoteLocal(voter.id, positionId);
-    },
-    [supabase, voter],
-  );
+  const getMyVote = useCallback(async (positionId: string) => {
+    return getMyVoteApi(positionId);
+  }, []);
 
-  const tallyPosition = useCallback(
-    async (positionId: string) => {
-      if (supabase) return tallyPositionApi(positionId);
-      return tallyPositionLocal(positionId);
-    },
-    [supabase],
-  );
+  const tallyPosition = useCallback(async (positionId: string) => {
+    return tallyPositionApi(positionId);
+  }, []);
 
-  return { castVote, getMyVote, tallyPosition, voter, supabase };
+  return { castVote, getMyVote, tallyPosition, voter, supabase: true as const };
 }
 
 export function usePositionTally(positionId: string | null) {
-  const supabase = isSupabaseVotingEnabled();
   const [tally, setTally] = useState<TallyRow[]>([]);
 
   useEffect(() => {
@@ -78,31 +44,22 @@ export function usePositionTally(positionId: string | null) {
     let cancelled = false;
 
     const load = () => {
-      if (supabase) {
-        tallyPositionApi(positionId)
-          .then((rows) => {
-            if (!cancelled) setTally(rows);
-          })
-          .catch((e) => console.warn("[tally]", e));
-      } else {
-        setTally(tallyPositionLocal(positionId));
-      }
+      tallyPositionApi(positionId)
+        .then((rows) => {
+          if (!cancelled) setTally(rows);
+        })
+        .catch((e) => console.warn("[tally]", e));
     };
 
     load();
-    if (!supabase || !positionId)
-      return () => {
-        cancelled = true;
-      };
-
     const unsub = subscribeToPositionVotes(positionId, load);
-    const fallback = window.setInterval(load, 30_000);
+    const poll = window.setInterval(load, 30_000);
     return () => {
       cancelled = true;
       unsub();
-      window.clearInterval(fallback);
+      window.clearInterval(poll);
     };
-  }, [positionId, supabase]);
+  }, [positionId]);
 
   return tally;
 }
@@ -121,48 +78,35 @@ export function checkEligibility(
       reason: "You are vying for this seat, so you cannot vote in it",
     };
   }
-  if (isSupabaseVotingEnabled()) {
-    if (position.tier === "national") return { eligible: true };
-    if (position.tier === "county" && position.county === voter.county) return { eligible: true };
-    if (
-      position.tier === "constituency" &&
-      position.county === voter.county &&
-      position.constituency === voter.constituency
-    ) {
-      return { eligible: true };
-    }
-    if (
-      position.tier === "ward" &&
-      position.county === voter.county &&
-      position.constituency === voter.constituency &&
-      position.ward === voter.ward
-    ) {
-      return { eligible: true };
-    }
-    return { eligible: false, reason: "This seat is outside your registered location" };
+  if (position.tier === "national") return { eligible: true };
+  if (position.tier === "county" && position.county === voter.county) return { eligible: true };
+  if (
+    position.tier === "constituency" &&
+    position.county === voter.county &&
+    position.constituency === voter.constituency
+  ) {
+    return { eligible: true };
   }
-  const ok = isEligible(voter, position);
-  return ok
-    ? { eligible: true }
-    : { eligible: false, reason: eligibilityReason(voter, position) ?? undefined };
+  if (
+    position.tier === "ward" &&
+    position.county === voter.county &&
+    position.constituency === voter.constituency &&
+    position.ward === voter.ward
+  ) {
+    return { eligible: true };
+  }
+  return { eligible: false, reason: "This seat is outside your registered location" };
 }
 
 export async function fetchElectionTotals(): Promise<{
   totalVotesCast: number;
   totalVotesByPosition: Record<string, number>;
 }> {
-  if (isSupabaseVotingEnabled()) {
-    const [total, byPos] = await Promise.all([totalVotesCastApi(), totalVotesByPositionApi()]);
-    return { totalVotesCast: total, totalVotesByPosition: byPos };
-  }
-  return {
-    totalVotesCast: totalVotesCastLocal(),
-    totalVotesByPosition: totalVotesByPositionLocal(),
-  };
+  const [total, byPos] = await Promise.all([totalVotesCastApi(), totalVotesByPositionApi()]);
+  return { totalVotesCast: total, totalVotesByPosition: byPos };
 }
 
 export async function fetchMyVotes(_voter: Voter | null) {
-  if (!isSupabaseVotingEnabled()) return [];
   return getMyVotes();
 }
 

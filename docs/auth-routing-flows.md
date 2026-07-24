@@ -16,7 +16,7 @@ Central resolver: [`resolvePostLoginPath`](../src/lib/api/admin-check.ts) in `sr
 | Both (voter + pending apply) | voter + pending vie | `/dashboard` + banner to finish apply |
 | Both (voter + submitted) | voter + candidate | `/dashboard` |
 
-**Priority when multiple match:** Admin > Pending vie (no application) > explicit `?redirect=` > Voter dashboard > Candidate list > default `/dashboard`.
+**Priority when multiple match:** Admin > vie-only unfinished apply > explicit `?redirect=` > Voter dashboard > Candidate list > default `/dashboard`.
 
 ## Intended post-login / session-resume flow
 
@@ -26,9 +26,9 @@ flowchart TD
   entry --> resolve[resolvePostLoginPath]
   resolve --> adminCheck{admin_users?}
   adminCheck -->|yes| adminHome["/admin"]
-  adminCheck -->|no| pendingVie{signup_intent vie/both AND no candidates row?}
-  pendingVie -->|yes| apply["/candidates/apply"]
-  pendingVie -->|no| hasRedirect{explicit ?redirect=}
+  adminCheck -->|no| pendingVieOnly{vie-only pending apply AND no voter row?}
+  pendingVieOnly -->|yes| apply["/candidates/apply"]
+  pendingVieOnly -->|no| hasRedirect{explicit ?redirect=}
   hasRedirect -->|yes| redirectTarget[redirect target]
   hasRedirect -->|no| hasVoter{voters row?}
   hasVoter -->|yes| dash["/dashboard"]
@@ -39,14 +39,14 @@ flowchart TD
 
 ## Signup destinations (after account create)
 
-Kept ballot-first for voters; not aligned to login default on purpose.
+Voters and “both” land on the voter dashboard (same as login). Vie-only goes to apply.
 
 ```mermaid
 flowchart TD
   signup[Sign up submit] --> intent{intent}
   intent -->|vie| apply["/candidates/apply"]
-  intent -->|vote| elections["/elections or ?redirect"]
-  intent -->|both| elections
+  intent -->|vote| dash["/dashboard or ?redirect"]
+  intent -->|both| dash
 ```
 
 At signup, `user_metadata` stores:
@@ -87,13 +87,12 @@ All roles: `signOut` → `/`. Header flips to Log in / Sign up via `onAuthStateC
 1. `user_metadata.signup_intent` is `vie` or `both`, and
 2. no row in `candidates` for `user_id`.
 
-On login → `/candidates/apply` with toast. On dashboard: vie-only users are redirected; “both” users see a finish-application banner.
+On login: vie-only unfinished apply → `/candidates/apply`. “Both” (voter + unfinished apply) → `/dashboard` with finish-apply banner. On dashboard: vie-only users are redirected to apply; “both” keep the banner.
 
 **Legacy accounts** created before `signup_intent` was stored are not flagged.
 
 ## Intentional inconsistencies (out of scope)
 
-- Signup `vote`/`both` lands on `/elections`; login default is `/dashboard` (ballot-first after enroll).
 - MFA / TOTP for admins is temporarily disabled (`ADMIN_MFA_ENFORCED`).
 - No backfill of `signup_intent` for old users.
 
@@ -102,3 +101,5 @@ On login → `/candidates/apply` with toast. On dashboard: vie-only users are re
 1. `resolvePostLoginPath` routes by voter vs submitted-candidate when there is no explicit redirect.
 2. Header uses `authReady` + `homePath` so signed-in users never flash Log in, and the account chip goes to the correct home.
 3. Removed unused `afterAuth` in `auth.tsx`.
+4. Signup `vote`/`both` and login both land on `/dashboard` (voters’ home). Vie-only → `/candidates/apply`; submitted candidates (no voter) → `/candidates`.
+5. “Both” with unfinished apply keeps `/dashboard` (banner) instead of being forced to apply on login.

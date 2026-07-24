@@ -66,8 +66,11 @@ export async function hasPendingVieApplication(userId?: string): Promise<boolean
 /**
  * Where to send a user immediately after sign-in / when resuming a session.
  *
- * Priority: Admin > pending vie application > explicit ?redirect= >
+ * Priority: Admin > vie-only unfinished apply > explicit ?redirect= >
  * voter dashboard > submitted candidate list > default /dashboard.
+ *
+ * "Both" (voter + unfinished apply) goes to /dashboard — the finish-apply
+ * banner prompts them there. Pure candidates with no voter row go to apply.
  */
 export async function resolvePostLoginPath(options?: {
   redirect?: string;
@@ -75,8 +78,6 @@ export async function resolvePostLoginPath(options?: {
 }): Promise<string> {
   const admin = await getMyAdminRow(options?.userId);
   if (admin) return "/admin";
-  if (await hasPendingVieApplication(options?.userId)) return "/candidates/apply";
-  if (options?.redirect) return options.redirect;
 
   let uid = options?.userId;
   if (!uid) {
@@ -85,13 +86,17 @@ export async function resolvePostLoginPath(options?: {
     } = await supabase.auth.getUser();
     uid = user?.id;
   }
-  if (!uid) return "/dashboard";
+  if (!uid) return options?.redirect ?? "/dashboard";
 
-  const { data: voter } = await supabase
-    .from("voters")
-    .select("id")
-    .eq("user_id", uid)
-    .maybeSingle();
+  const [{ data: voter }, pendingVie] = await Promise.all([
+    supabase.from("voters").select("id").eq("user_id", uid).maybeSingle(),
+    hasPendingVieApplication(uid),
+  ]);
+
+  // Vie-only: no voter record and unfinished application → finish applying.
+  if (pendingVie && !voter) return "/candidates/apply";
+
+  if (options?.redirect) return options.redirect;
   if (voter) return "/dashboard";
 
   const { data: candidates } = await supabase
